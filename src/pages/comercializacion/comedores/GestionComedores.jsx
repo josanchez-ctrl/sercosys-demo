@@ -6,7 +6,7 @@ import { getSucursales } from '../../../services/sucursalService';
 import { getTiposServicios } from '../../../services/tipoServicioService';
 import { getEstructurasMenu } from '../../../services/estructuraMenuService';
 import { supabase } from '../../../lib/supabase';
-import ComedorModal from './ComedorModal';
+import ComedoresModal from './ComedoresModal';
 import ViewUser from '../../../components/user-table/ViewUser';
 import { formatDateSystemToDDMMYYYY_HHMMSS } from '../../../util/workDate';
 
@@ -140,14 +140,15 @@ export default function GestionComedores() {
               <div className="space-y-3 relative z-10">
                 <p className="text-[9px] font-black text-slate-300 uppercase tracking-[0.2em] mb-2">Servicios Configurados</p>
                 <div className="flex flex-wrap gap-2">
-                  {com.servicios_config?.map(srv => (
-                    <div key={srv.id} className="flex flex-col bg-slate-50 border border-slate-100 rounded-xl p-2 min-w-[80px]">
+                  {com.servicios_config?.filter(srv => srv.estatus !== false).map(srv => (
+                    <div key={srv.id} className="flex flex-col bg-slate-50 border border-slate-100 rounded-xl p-2.5 min-w-[90px] gap-0.5">
                       <span className="text-[9px] font-black text-brand-900 uppercase truncate">{srv.tipo_servicio?.nombre}</span>
                       <span className="text-[8px] font-bold text-slate-400 uppercase italic truncate">{srv.estructura?.nombre}</span>
+                      <span className="text-[10px] font-black text-brand-600 mt-1 font-mono">${Number(srv.precio_menu || 0).toFixed(2)}</span>
                     </div>
                   ))}
-                  {(!com.servicios_config || com.servicios_config.length === 0) && (
-                    <span className="text-[9px] font-bold text-red-400 italic">Sin servicios configurados</span>
+                  {(!com.servicios_config || com.servicios_config.filter(srv => srv.estatus !== false).length === 0) && (
+                    <span className="text-[9px] font-bold text-red-400 italic">Sin servicios activos</span>
                   )}
                 </div>
               </div>
@@ -166,7 +167,7 @@ export default function GestionComedores() {
       </div>
 
       {showModal && (
-        <ComedorModal
+        <ComedoresModal
           initialData={selectedItem}
           sucursales={sucursales}
           tiposServicios={tiposServicios}

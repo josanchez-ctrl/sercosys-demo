@@ -73,35 +73,62 @@ export async function saveComedorCompleto(comedorPayload, serviciosConfig, userI
     savedComedor = data;
   }
 
-  // 2. Guardar Configuración de Servicios y Slots (Sync)
-  if (!isNew) {
-    // El cascaded delete se encarga de comedor_servicios_slots_config
-    await supabase.from('comedor_servicios_config').delete().eq('id_comedor', savedComedor.id);
-  }
+  // 2. Sincronizar Configuración de Servicios (Upsert inteligente para preservar IDs)
+  const { data: actuales, error: errActuales } = await supabase
+    .from('comedor_servicios_config')
+    .select('id, id_tipo_servicio')
+    .eq('id_comedor', savedComedor.id);
+  if (errActuales) throw errActuales;
+
+  const actualesMap = new Map(actuales?.map(a => [Number(a.id_tipo_servicio), a.id]) || []);
 
   if (serviciosConfig && serviciosConfig.length > 0) {
     for (const cfg of serviciosConfig) {
-      // Guardar el servicio
+      const idTipo = Number(cfg.id_tipo_servicio);
+      const existeId = actualesMap.get(idTipo);
+
       const serviceData = {
         id_comedor: savedComedor.id,
-        id_tipo_servicio: cfg.id_tipo_servicio,
+        id_tipo_servicio: idTipo,
         id_estructura_menu: cfg.id_estructura_menu,
-        id_usuario_create: userId,
-        timestamp_create: now
+        precio_menu: Number(cfg.precio_menu) || 0,
+        estatus: true, // Asegurar que esté activo
+        id_usuario_update: userId,
+        timestamp_update: now
       };
 
-      const { data: savedService, error: cfgError } = await supabase
-        .from('comedor_servicios_config')
-        .insert(serviceData)
-        .select()
-        .single();
-      
-      if (cfgError) throw cfgError;
+      let savedServiceId;
 
-      // Guardar los ajustes de slots (si existen)
+      if (existeId) {
+        // Actualizar existente (preserva el ID y evita romper claves foráneas de planificación)
+        const { data: updated, error: updateError } = await supabase
+          .from('comedor_servicios_config')
+          .update(serviceData)
+          .eq('id', existeId)
+          .select()
+          .single();
+        if (updateError) throw updateError;
+        savedServiceId = updated.id;
+      } else {
+        // Insertar nuevo
+        serviceData.id_usuario_create = userId;
+        serviceData.timestamp_create = now;
+        const { data: inserted, error: insertError } = await supabase
+          .from('comedor_servicios_config')
+          .insert(serviceData)
+          .select()
+          .single();
+        if (insertError) throw insertError;
+        savedServiceId = inserted.id;
+      }
+
+      // Sincronizar slots asociados al servicio
+      // Eliminamos los slots antiguos (los slots no son referenciados de manera externa, por lo que delete físico es seguro)
+      await supabase.from('comedor_servicios_slots_config').delete().eq('id_comedor_servicio', savedServiceId);
+
       if (cfg.slots_config && cfg.slots_config.length > 0) {
         const slotsToSave = cfg.slots_config.map(slot => ({
-          id_comedor_servicio: savedService.id,
+          id_comedor_servicio: savedServiceId,
           id_slot: slot.id_slot,
           cantidad_objetivo: slot.cantidad_objetivo || 0,
           id_unidad_medida: slot.id_unidad_medida || null,
@@ -113,6 +140,19 @@ export async function saveComedorCompleto(comedorPayload, serviciosConfig, userI
         if (slotError) throw slotError;
       }
     }
+  }
+
+  // Desactivar lógicamente servicios que no están en el nuevo payload para no romper históricos
+  const nuevosIdsTipos = new Set(serviciosConfig?.map(cfg => Number(cfg.id_tipo_servicio)) || []);
+  const desactivos = actuales?.filter(a => !nuevosIdsTipos.has(Number(a.id_tipo_servicio))) || [];
+
+  if (desactivos.length > 0) {
+    const idsADesactivar = desactivos.map(d => d.id);
+    const { error: desactivaError } = await supabase
+      .from('comedor_servicios_config')
+      .update({ estatus: false, id_usuario_update: userId, timestamp_update: now })
+      .in('id', idsADesactivar);
+    if (desactivaError) throw desactivaError;
   }
 
   return savedComedor;

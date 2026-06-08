@@ -7,6 +7,7 @@ import { saveEstructuraCompleta } from '../../../services/estructuraMenuService'
 
 const validationSchema = Yup.object({
   nombre: Yup.string().required('El nombre es obligatorio'),
+  id_tipo_servicio: Yup.string().required('El servicio es obligatorio'),
   slots: Yup.array().of(
     Yup.object().shape({
       nombre: Yup.string().required('El nombre del slot es obligatorio'),
@@ -16,7 +17,7 @@ const validationSchema = Yup.object({
   ).min(1, 'Debe agregar al menos un slot')
 });
 
-export default function EstructuraMenuModal({ initialData = null, tipologias = [], unidades = [], empresaActiva, perfil, onClose, onUpdate }) {
+export default function EstructuraMenuModal({ initialData = null, tipologias = [], tiposServicios = [], unidades = [], empresaActiva, perfil, onClose, onUpdate }) {
   const isEdit = !!initialData;
   const [loading, setLoading] = useState(false);
 
@@ -35,6 +36,7 @@ export default function EstructuraMenuModal({ initialData = null, tipologias = [
       id: initialData?.id || null,
       id_empresa: empresaActiva.id,
       nombre: initialData?.nombre || '',
+      id_tipo_servicio: initialData?.id_tipo_servicio || '',
       estatus: true,
       slots: initialSlots
     },
@@ -76,7 +78,7 @@ export default function EstructuraMenuModal({ initialData = null, tipologias = [
 
   return createPortal(
     <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-300" onClick={onClose}>
-      <div className="bg-white w-full max-w-4xl h-full max-h-[90vh] rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-300" onClick={e => e.stopPropagation()}>
+      <div className="bg-white w-full max-w-[96vw] h-full max-h-[90vh] rounded-md shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-300" onClick={e => e.stopPropagation()}>
 
         {/* Header */}
         <div className="px-8 py-6 border-b border-gray-100 flex items-center justify-between bg-white relative">
@@ -102,17 +104,36 @@ export default function EstructuraMenuModal({ initialData = null, tipologias = [
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-8 space-y-8 bg-gray-50/30 custom-scrollbar">
 
-          {/* Nombre de la Estructura */}
-          <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
-              <ClipboardList size={12} className="text-brand-900" /> Nombre de la Clasificación (Ej: Básico, Estándar, VIP)
-            </label>
-            <input
-              type="text"
-              {...formik.getFieldProps('nombre')}
-              placeholder="Ej: BÁSICO"
-              className={`w-full px-4 py-3 bg-slate-50 rounded-md border text-sm font-black text-slate-700 outline-none focus:ring-4 transition-all ${formik.touched.nombre && formik.errors.nombre ? 'border-red-500 focus:ring-red-100' : 'border-gray-100 focus:ring-brand-900/5 focus:border-brand-900'}`}
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Nombre de la Estructura */}
+            <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                <ClipboardList size={12} className="text-brand-900" /> Nombre de la Clasificación (Ej: Básico, Estándar, VIP)
+              </label>
+              <input
+                type="text"
+                {...formik.getFieldProps('nombre')}
+                placeholder="Ej: BÁSICO"
+                className={`w-full px-4 py-3 bg-slate-50 rounded-md border text-sm font-black text-slate-700 outline-none focus:ring-4 transition-all ${formik.touched.nombre && formik.errors.nombre ? 'border-red-500 focus:ring-red-100' : 'border-gray-100 focus:ring-brand-900/5 focus:border-brand-900'}`}
+              />
+            </div>
+            
+            {/* Servicio Asociado */}
+            <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                <ClipboardList size={12} className="text-brand-900" /> Servicio al que se Asocia esta Clasificación
+              </label>
+              <select
+                {...formik.getFieldProps('id_tipo_servicio')}
+                className={`w-full px-4 py-3 bg-slate-50 rounded-md border text-sm font-black text-slate-700 outline-none focus:ring-4 transition-all ${formik.touched.id_tipo_servicio && formik.errors.id_tipo_servicio ? 'border-red-500 focus:ring-red-100' : 'border-gray-100 focus:ring-brand-900/5 focus:border-brand-900'}`}
+              >
+                <option value="">Seleccione un servicio...</option>
+                {tiposServicios.map(ts => (
+                  <option key={ts.id} value={ts.id}>{ts.nombre}</option>
+                ))}
+              </select>
+            </div>
+
           </div>
 
           {/* Gestión de Slots */}

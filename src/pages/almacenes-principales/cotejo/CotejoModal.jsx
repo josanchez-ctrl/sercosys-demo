@@ -373,6 +373,15 @@ export default function CotejoModal({ initialData = null, empresaActiva, almacen
   const canEditQuantities = isBorrador;
   const canAddProducts = isBorrador;
 
+  const inputRef = useRef(null);
+
+  const manejarClick = () => {
+    // Cerrar teclado: perder el enfoque
+    if (inputRef.current) {
+      inputRef.current.blur();
+    }
+  };
+
 
 
   return createPortal(
@@ -537,6 +546,9 @@ export default function CotejoModal({ initialData = null, empresaActiva, almacen
                         }
                       }}
                       onChange={(e) => { setProductSearch(e.target.value); setShowResults(true); }}
+                      onClick={manejarClick}
+                      onFocus={manejarClick}
+                      ref={inputRef}
                       placeholder="Escriba nombre, marca o código..."
                       className="flex-1 px-4 py-5 text-sm font-bold text-slate-800 outline-none placeholder:text-slate-300"
                     />

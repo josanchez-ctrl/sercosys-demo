@@ -3,6 +3,7 @@ import { ClipboardList, Plus, Search, Edit2, Layers, CheckSquare, Square, Trash2
 import { useModulePermissions } from '../../../hooks/useModulePermissions';
 import { getEstructurasMenu } from '../../../services/estructuraMenuService';
 import { getRecetaTipologias } from '../../../services/recetaTipologiaService';
+import { getTiposServicios } from '../../../services/tipoServicioService';
 import { supabase } from '../../../lib/supabase';
 import EstructuraMenuModal from './EstructuraMenuModal';
 import ViewUser from '../../../components/user-table/ViewUser';
@@ -14,6 +15,7 @@ export default function GestionEstructuraMenu() {
   const [loading, setLoading] = useState(true);
   const [estructuras, setEstructuras] = useState([]);
   const [tipologias, setTipologias] = useState([]); // Cache para mostrar nombres en el dashboard
+  const [tiposServicios, setTiposServicios] = useState([]);
   const [unidades, setUnidades] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
@@ -23,6 +25,7 @@ export default function GestionEstructuraMenu() {
     if (empresaActiva?.id) {
       fetchData();
       getRecetaTipologias(empresaActiva.id).then(setTipologias);
+      getTiposServicios(empresaActiva.id).then(setTiposServicios);
       supabase.from('almacen_unidades_medida').select('*').order('nombre').then(res => setUnidades(res.data || []));
 
       const channel = supabase
@@ -107,6 +110,11 @@ export default function GestionEstructuraMenu() {
                     <span className="text-[9px] font-black text-brand-900 bg-brand-50 px-2 py-0.5 rounded-lg border border-brand-100 uppercase tracking-widest">
                       {est.slots?.length || 0} Renglones (Slots)
                     </span>
+                    {est.id_tipo_servicio && (
+                      <span className="text-[9px] font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-100 uppercase tracking-widest">
+                        {tiposServicios.find(ts => ts.id === est.id_tipo_servicio)?.nombre || 'Servicio Vinculado'}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="flex gap-2">
@@ -160,6 +168,7 @@ export default function GestionEstructuraMenu() {
         <EstructuraMenuModal
           initialData={selectedItem}
           tipologias={tipologias}
+          tiposServicios={tiposServicios}
           unidades={unidades}
           empresaActiva={empresaActiva}
           perfil={perfil}

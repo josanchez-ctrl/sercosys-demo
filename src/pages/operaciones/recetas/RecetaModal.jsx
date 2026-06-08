@@ -166,7 +166,11 @@ export default function RecetaModal({
                       <label className="text-[9px] font-black text-slate-400 uppercase mb-2 block">Tipología</label>
                       <select
                         {...formik.getFieldProps('id_tipologia')}
-                        className="w-full px-4 py-3 bg-white rounded-md border border-gray-100 text-xs font-black text-slate-700 focus:ring-4 focus:ring-brand-900/5 focus:border-brand-900 outline-none transition-all"
+                        /* className="w-full px-4 py-3 bg-white rounded-md border border-gray-100 text-xs font-black text-slate-700 focus:ring-4 focus:ring-brand-900/5 focus:border-brand-900 outline-none transition-all" */
+                        className={`w-full px-4 py-3 bg-white rounded-md border border-gray-100 text-xs font-black text-slate-700 focus:ring-4 focus:ring-brand-900/5 focus:border-brand-900 outline-none transition-all
+                          ${formik.touched.id_tipologia && formik.errors.id_tipologia
+                                  ? 'border-red-300 ring-4 ring-red-100'
+                                  : 'border-gray-100 focus:ring-4 focus:ring-brand-accent/10 focus:border-brand-accent focus:bg-white'}`}
                       >
                         <option value="">Seleccione...</option>
                         {tipologias.map(t => (
