@@ -1,0 +1,30 @@
+# Dependencias
+node_modules/
+/dist
+/dev-dist
+
+# Entorno y variables locales
+.env
+.env.local
+.env.*.local
+
+# Logs y depuración
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editores de código e IDEs
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Archivos de agentes y scratch
+scratch/
+.agent/
+.agents/
+graphify-out/

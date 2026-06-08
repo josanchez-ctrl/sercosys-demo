@@ -1,0 +1,21 @@
+{
+  "name": "SercoSys",
+  "short_name": "SercoSys",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1e293b",
+  "description": "SercoSyS para gestionar operaciones y más...",
+  "icons": [
+    {
+      "src": "icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}
