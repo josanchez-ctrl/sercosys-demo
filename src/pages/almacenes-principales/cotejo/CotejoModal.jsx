@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, Fragment } from 'react';
 import { toast } from 'sonner';
 import { createPortal } from 'react-dom';
-import { X, ArrowRightFromLine, Package, QrCode, FileText, AlertTriangle, Save, Send, CheckCircle2, XCircle, Search, Trash2, Calendar, Hash, Truck, Warehouse, DollarSign, ShieldCheck, Printer, Tag } from 'lucide-react';
+import { X, ArrowRightFromLine, Package, QrCode, FileText, AlertTriangle, Save, Send, CheckCircle2, XCircle, Search, Trash2, Calendar, Hash, Truck, Warehouse, DollarSign, ShieldCheck, Printer, Tag, Keyboard } from 'lucide-react';
 import { useFormik } from 'formik';
 import * as Yup from 'yup';
 import { formato8Digitos, formatearFecha, formato5Digitos } from '../../../util/workDate';
@@ -60,6 +60,17 @@ export default function CotejoModal({ initialData = null, empresaActiva, almacen
   const [dataEtiquetas, setDataEtiquetas] = useState([]);
   const [motivoAnulacion, setMotivoAnulacion] = useState('');
   const searchInputRef = useRef(null);
+  const [lectorMode, setLectorMode] = useState(() => {
+    return localStorage.getItem('cotejo_lector_mode') === 'true';
+  });
+
+  const toggleLectorMode = () => {
+    setLectorMode(prev => {
+      const next = !prev;
+      localStorage.setItem('cotejo_lector_mode', String(next));
+      return next;
+    });
+  };
 
   const [productSearch, setProductSearch] = useState('');
   const [showResults, setShowResults] = useState(false);
@@ -373,13 +384,9 @@ export default function CotejoModal({ initialData = null, empresaActiva, almacen
   const canEditQuantities = isBorrador;
   const canAddProducts = isBorrador;
 
-  const inputRef = useRef(null);
-
   const manejarClick = () => {
-    // Cerrar teclado: perder el enfoque
-    if (inputRef.current) {
-      inputRef.current.blur();
-    }
+    // No-op: Evitamos desenfocar el campo al hacer clic o foco.
+    // El teclado virtual se gestiona de forma nativa mediante la prop inputMode.
   };
 
 
@@ -501,8 +508,9 @@ export default function CotejoModal({ initialData = null, empresaActiva, almacen
                     <input
                       ref={searchInputRef}
                       type="text"
+                      inputMode={lectorMode ? 'none' : 'text'}
                       value={productSearch}
-                      onFocus={() => setShowResults(true)}
+                      onFocus={() => {setShowResults(true); manejarClick();}}
                       onKeyDown={async (e) => {
                         if (e.key === 'Enter') {
                           e.preventDefault();
@@ -547,11 +555,26 @@ export default function CotejoModal({ initialData = null, empresaActiva, almacen
                       }}
                       onChange={(e) => { setProductSearch(e.target.value); setShowResults(true); }}
                       onClick={manejarClick}
-                      onFocus={manejarClick}
-                      ref={inputRef}
                       placeholder="Escriba nombre, marca o código..."
-                      className="flex-1 px-4 py-5 text-sm font-bold text-slate-800 outline-none placeholder:text-slate-300"
+                      className="flex-1 px-4 py-5 text-sm font-bold text-slate-800 outline-none placeholder:text-slate-300 bg-transparent"
                     />
+                    <div className="pr-4 flex items-center">
+                      <button
+                        type="button"
+                        onClick={toggleLectorMode}
+                        className={`p-2.5 rounded-xl border transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 ${
+                          lectorMode
+                            ? 'bg-brand-900 border-brand-900 text-white shadow-lg shadow-brand-900/20'
+                            : 'bg-white border-gray-100 text-slate-400 hover:border-brand-200 hover:bg-slate-50'
+                        }`}
+                        title={lectorMode ? "Lector de barras activo (teclado virtual oculto)" : "Teclado virtual activo (clic para activar lector de barras)"}
+                      >
+                        {lectorMode ? <QrCode size={16} /> : <Keyboard size={16} />}
+                        <span className="text-[9px] font-black uppercase tracking-widest hidden sm:inline">
+                          {lectorMode ? "Lector" : "Teclado"}
+                        </span>
+                      </button>
+                    </div>
                   </div>
 
                   {showResults && filteredProducts.length > 0 && (
@@ -610,7 +633,7 @@ export default function CotejoModal({ initialData = null, empresaActiva, almacen
                       <th className={`px-2 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-gray-100 ${isCatchWeightWarehouse ? 'w-64' : 'w-32'}`}>
                         {isCatchWeightWarehouse ? 'Cant. & Peso Real' : 'Unidad'}
                       </th>
-                      <th className="px-2 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-gray-100 w-48 bg-blue-50/40 text-blue-800">
+                      <th className="px-2 py-5 text-[10px] font-black uppercase tracking-widest border-b border-gray-100 w-48 bg-blue-50/40 text-blue-800">
                         {isCatchWeightWarehouse ? 'Peso Factura' : 'Cant. Factura'}
                       </th>
                       <th className="px-2 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-gray-100 w-40 text-center">Organoléptico</th>

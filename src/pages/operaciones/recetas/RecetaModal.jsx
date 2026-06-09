@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Save, ClipboardList, Plus, Trash2, Search, Utensils, Box, Check } from 'lucide-react';
+import { X, Save, ClipboardList, Plus, Trash2, Search, Utensils, Box, Check, AlertTriangle } from 'lucide-react';
 import { useFormik, FieldArray, FormikProvider } from 'formik';
 import * as Yup from 'yup';
 import { saveRecetaCompleta } from '../../../services/recetaService';
@@ -288,7 +288,14 @@ export default function RecetaModal({
                                 {searchType === 'RUBRO' ? <Box size={14} /> : <Utensils size={14} />}
                               </div>
                               <div className="flex flex-col items-start text-left">
-                                <span className="text-[11px] font-black text-slate-700 uppercase leading-none">{item.nombre}</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[11px] font-black text-slate-700 uppercase leading-none">{item.nombre}</span>
+                                  {((searchType === 'RUBRO' && item.es_alergeno) || (searchType === 'RECETA' && item.contiene_alergenos)) && (
+                                    <span className="flex items-center gap-0.5 px-1 bg-amber-50 text-amber-700 border border-amber-200 text-[7px] font-black uppercase tracking-widest rounded-md animate-pulse">
+                                      <AlertTriangle size={6} /> Alérgeno
+                                    </span>
+                                  )}
+                                </div>
                                 <span className="text-[8px] font-bold text-brand-600 uppercase tracking-tighter mt-1 bg-brand-50 px-1.5 py-0.5 rounded-md">
                                   {searchType === 'RUBRO' ? item.almacen_categorias?.nombre : item.codigo_ficha}
                                 </span>
@@ -309,77 +316,90 @@ export default function RecetaModal({
                 <FieldArray name="ingredientes">
                   {({ remove }) => (
                     formik.values.ingredientes.length > 0 ? (
-                      formik.values.ingredientes.map((ing, index) => (
-                        <div key={index} className="flex items-center gap-4 bg-white p-2 rounded-md border border-gray-100 shadow-sm animate-in slide-in-from-right-4 duration-300">
-                          <span className="w-6 text-center text-xs font-bold text-slate-700 uppercase tracking-tight leading-none bg-brand-50 rounded-lg">{formik.values.ingredientes.length - index}</span>
-                          <div className={`p-3 rounded-xl ${ing._tipo === 'RUBRO' ? 'bg-blue-50 text-blue-600' : 'bg-purple-50 text-purple-600'}`}>
-                            {ing._tipo === 'RUBRO' ? <Box size={16} /> : <Utensils size={16} />}
-                          </div>
+                      formik.values.ingredientes.map((ing, index) => {
+                        const rubroInfo = ing.id_rubro ? rubros.find(r => r.id === ing.id_rubro) : null;
+                        const subrecetaInfo = ing.id_sub_receta ? recetasDisponibles.find(r => r.id === ing.id_sub_receta) : null;
+                        const esAlergeno = (rubroInfo?.es_alergeno) || (subrecetaInfo?.contiene_alergenos);
 
-                          <div className="flex-1">
-                            <p className="text-[11px] font-bold text-slate-700 uppercase tracking-tight leading-none mb-1">{ing._label}</p>
-                            <p className="text-[8px] font-bold text-brand-900 bg-brand-50 px-2 py-0.5 rounded-lg inline-block uppercase tracking-tighter italic">
-                              {ing._categoria || (ing._tipo === 'RUBRO' ? 'Materia Prima' : 'Sub-Receta')}
-                            </p>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            <div className="relative">
-                              <input
-                                type="number"
-                                min={0.001}
-                                name={`ingredientes[${index}].cantidad`}
-                                value={formik.values.ingredientes[index].cantidad}
-                                onChange={formik.handleChange}
-                                step="any"
-                                className={`w-24 px-4 py-2 bg-slate-50 border rounded-xl text-center text-xs font-black outline-none transition-all ${formik.errors.ingredientes?.[index]?.cantidad
-                                  ? 'border-red-500 text-red-600 focus:ring-red-50'
-                                  : 'border-slate-100 text-slate-700 focus:border-brand-900'
-                                  }`}
-                              />
+                        return (
+                          <div key={index} className="flex items-center gap-4 bg-white p-2 rounded-md border border-gray-100 shadow-sm animate-in slide-in-from-right-4 duration-300">
+                            <span className="w-6 text-center text-xs font-bold text-slate-700 uppercase tracking-tight leading-none bg-brand-50 rounded-lg">{formik.values.ingredientes.length - index}</span>
+                            <div className={`p-3 rounded-xl ${ing._tipo === 'RUBRO' ? 'bg-blue-50 text-blue-600' : 'bg-purple-50 text-purple-600'}`}>
+                              {ing._tipo === 'RUBRO' ? <Box size={16} /> : <Utensils size={16} />}
                             </div>
-                            <span className="text-[10px] font-black text-slate-400 uppercase w-10">{ing._unidad}</span>
-                          </div>
 
-                          <div className="flex flex-col items-center gap-1">
-                            <label className="text-[8px] font-black text-slate-300 uppercase leading-none">Escalable</label>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <p className="text-[11px] font-bold text-slate-700 uppercase tracking-tight leading-none">{ing._label}</p>
+                                {esAlergeno && (
+                                  <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 text-[7px] font-black uppercase tracking-widest rounded-md animate-pulse">
+                                    <AlertTriangle size={6} /> Alérgeno
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[8px] font-bold text-brand-900 bg-brand-50 px-2 py-0.5 rounded-lg inline-block uppercase tracking-tighter italic">
+                                {ing._categoria || (ing._tipo === 'RUBRO' ? 'Materia Prima' : 'Sub-Receta')}
+                              </p>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <div className="relative">
+                                <input
+                                  type="number"
+                                  min={0.001}
+                                  name={`ingredientes[${index}].cantidad`}
+                                  value={formik.values.ingredientes[index].cantidad}
+                                  onChange={formik.handleChange}
+                                  step="any"
+                                  className={`w-24 px-4 py-2 bg-slate-50 border rounded-xl text-center text-xs font-black outline-none transition-all ${formik.errors.ingredientes?.[index]?.cantidad
+                                    ? 'border-red-500 text-red-600 focus:ring-red-50'
+                                    : 'border-slate-100 text-slate-700 focus:border-brand-900'
+                                    }`}
+                                />
+                              </div>
+                              <span className="text-[10px] font-black text-slate-400 uppercase w-10">{ing._unidad}</span>
+                            </div>
+
+                            <div className="flex flex-col items-center gap-1">
+                              <label className="text-[8px] font-black text-slate-300 uppercase leading-none">Escalable</label>
+                              <button
+                                type="button"
+                                onClick={() => formik.setFieldValue(`ingredientes[${index}].es_escalable`, !ing.es_escalable)}
+                                className={`p-2 rounded-xl transition-all border ${ing.es_escalable
+                                  ? 'bg-emerald-50 border-emerald-200 text-emerald-600 shadow-sm'
+                                  : 'bg-slate-50 border-slate-100 text-slate-300 hover:text-slate-400'
+                                  }`}
+                                title={ing.es_escalable ? 'Escala con el gramaje' : 'Cantidad fija'}
+                              >
+                                <Check size={16} className={ing.es_escalable ? 'opacity-100 scale-110' : 'opacity-20 scale-90'} />
+                              </button>
+                            </div>
+
+                            <div className="flex flex-col items-center gap-1">
+                              <label className="text-[8px] font-black text-slate-300 uppercase leading-none">Opcional</label>
+                              <button
+                                type="button"
+                                onClick={() => formik.setFieldValue(`ingredientes[${index}].es_opcional`, !ing.es_opcional)}
+                                className={`p-2 rounded-xl transition-all border ${ing.es_opcional
+                                  ? 'bg-brand-50 border-brand-200 text-brand-900 shadow-sm'
+                                  : 'bg-slate-50 border-slate-100 text-slate-300 hover:text-slate-400'
+                                  }`}
+                                title={ing.es_opcional ? 'Ingrediente Opcional' : 'Ingrediente Obligatorio'}
+                              >
+                                <Plus size={16} className={ing.es_opcional ? 'opacity-100 scale-110' : 'opacity-20 scale-90'} />
+                              </button>
+                            </div>
+
                             <button
                               type="button"
-                              onClick={() => formik.setFieldValue(`ingredientes[${index}].es_escalable`, !ing.es_escalable)}
-                              className={`p-2 rounded-xl transition-all border ${ing.es_escalable
-                                ? 'bg-emerald-50 border-emerald-200 text-emerald-600 shadow-sm'
-                                : 'bg-slate-50 border-slate-100 text-slate-300 hover:text-slate-400'
-                                }`}
-                              title={ing.es_escalable ? 'Escala con el gramaje' : 'Cantidad fija'}
+                              onClick={() => remove(index)}
+                              className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
                             >
-                              <Check size={16} className={ing.es_escalable ? 'opacity-100 scale-110' : 'opacity-20 scale-90'} />
+                              <Trash2 size={16} />
                             </button>
                           </div>
-
-                          <div className="flex flex-col items-center gap-1">
-                            <label className="text-[8px] font-black text-slate-300 uppercase leading-none">Opcional</label>
-                            <button
-                              type="button"
-                              onClick={() => formik.setFieldValue(`ingredientes[${index}].es_opcional`, !ing.es_opcional)}
-                              className={`p-2 rounded-xl transition-all border ${ing.es_opcional
-                                ? 'bg-brand-50 border-brand-200 text-brand-900 shadow-sm'
-                                : 'bg-slate-50 border-slate-100 text-slate-300 hover:text-slate-400'
-                                }`}
-                              title={ing.es_opcional ? 'Ingrediente Opcional' : 'Ingrediente Obligatorio'}
-                            >
-                              <Plus size={16} className={ing.es_opcional ? 'opacity-100 scale-110' : 'opacity-20 scale-90'} />
-                            </button>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => remove(index)}
-                            className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      ))
+                        );
+                      })
                     ) : (
                       <div className="h-full flex flex-col items-center justify-center opacity-20 py-20">
                         <ClipboardList size={48} className="text-slate-400" />

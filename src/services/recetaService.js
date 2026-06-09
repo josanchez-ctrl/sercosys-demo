@@ -14,7 +14,7 @@ export async function getRecetas(id_empresa) {
       unidad_porcion: almacen_unidades_medida(id, abreviatura, nombre),
       ingredientes: maestro_receta_ingredientes!maestro_receta_ingredientes_id_receta_padre_fkey (
         *,
-        rubro: almacen_rubros(nombre, id_unidad_medida, unidad: almacen_unidades_medida(abreviatura), categoria: almacen_categorias(nombre)),
+        rubro: almacen_rubros(nombre, es_alergeno, id_unidad_medida, unidad: almacen_unidades_medida(abreviatura), categoria: almacen_categorias(nombre)),
         sub_receta: maestro_recetas!maestro_receta_ingredientes_id_sub_receta_fkey(nombre, codigo_ficha)
       )
     `)
