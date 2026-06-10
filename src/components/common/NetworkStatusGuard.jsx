@@ -45,7 +45,7 @@ export default function NetworkStatusGuard({ children }) {
     setInitialCheckDone(true);
 
     return () => {
-      supabase.removeChannel(channel);
+      //supabase.removeChannel(channel);
       window.removeEventListener('online', handleConnect);
       window.removeEventListener('offline', handleDisconnect);
     };

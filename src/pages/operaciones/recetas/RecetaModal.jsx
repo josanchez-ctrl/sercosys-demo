@@ -21,6 +21,7 @@ const validationSchema = Yup.object({
 
 export default function RecetaModal({
   initialData = null,
+  isClone = false,
   tipologias = [],
   rubros = [],
   unidades = [],
@@ -30,22 +31,22 @@ export default function RecetaModal({
   onClose,
   onUpdate
 }) {
-  const isEdit = !!initialData;
+  const isEdit = !!initialData && !isClone;
   const [loading, setLoading] = useState(false);
 
   const formik = useFormik({
     initialValues: {
-      id: initialData?.id || null,
+      id: isClone ? null : (initialData?.id || null),
       id_empresa: empresaActiva.id,
       id_tipologia: initialData?.id_tipologia || '',
       id_unidad_medida: initialData?.id_unidad_medida || '',
-      codigo_ficha: initialData?.codigo_ficha || '',
-      nombre: initialData?.nombre || '',
+      codigo_ficha: isClone ? '' : (initialData?.codigo_ficha || ''),
+      nombre: isClone ? `COPIA - ${initialData?.nombre || ''}` : (initialData?.nombre || ''),
       rendimiento: initialData?.rendimiento || 1,
       peso_porcion_base: initialData?.peso_porcion_base || 0,
       estatus: true,
       ingredientes: initialData?.ingredientes?.map(i => ({
-        id: i.id,
+        id: isClone ? null : i.id,
         id_rubro: i.id_rubro,
         id_sub_receta: i.id_sub_receta,
         cantidad: i.cantidad,
@@ -138,7 +139,7 @@ export default function RecetaModal({
             </div>
             <div>
               <h3 className="text-xl font-black text-slate-800 tracking-tight leading-tight">
-                {isEdit ? 'Editar Receta' : 'Nueva Receta'}
+                {isClone ? 'Duplicar Receta' : isEdit ? 'Editar Receta' : 'Nueva Receta'}
               </h3>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">
                 Ficha Técnica y Escandallo de Ingredientes

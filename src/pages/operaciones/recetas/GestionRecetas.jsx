@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowRightFromLine, Plus, Search, Edit2, Trash2, ClipboardList, Utensils, AlertTriangle } from 'lucide-react';
+import { ArrowRightFromLine, Plus, Search, Edit2, Trash2, ClipboardList, Utensils, AlertTriangle, Copy } from 'lucide-react';
 import { useModulePermissions } from '../../../hooks/useModulePermissions';
 import { getRecetas, deleteReceta } from '../../../services/recetaService';
 import { getRecetaTipologias } from '../../../services/recetaTipologiaService';
@@ -57,6 +57,7 @@ export default function GestionRecetas() {
   const [onlyAllergens, setOnlyAllergens] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
+  const [isCloneMode, setIsCloneMode] = useState(false);
 
   useEffect(() => {
     if (empresaActiva?.id) {
@@ -172,7 +173,7 @@ export default function GestionRecetas() {
         </div>
 
         <button
-          onClick={() => { setSelectedItem(null); setShowModal(true); }}
+          onClick={() => { setSelectedItem(null); setIsCloneMode(false); setShowModal(true); }}
           className="flex bg-brand-900 text-white px-8 py-4 rounded-md text-sm font-black uppercase tracking-widest hover:bg-brand-600 transition-all shadow-xl shadow-brand-900/20 active:scale-95 items-center gap-2"
         >
           <Plus size={18} />
@@ -349,11 +350,19 @@ export default function GestionRecetas() {
                           <div className="flex items-center justify-center gap-2">
                             <button
                               type="button"
-                              onClick={() => { setSelectedItem(rec); setShowModal(true); }}
+                              onClick={() => { setSelectedItem(rec); setIsCloneMode(false); setShowModal(true); }}
                               className="p-2 bg-slate-50 text-slate-400 hover:text-brand-900 hover:bg-brand-50 rounded-lg transition-all border border-transparent hover:border-brand-100 shadow-sm"
                               title="Editar Receta"
                             >
                               <Edit2 size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setSelectedItem(rec); setIsCloneMode(true); setShowModal(true); }}
+                              className="p-2 bg-slate-50 text-slate-400 hover:text-brand-900 hover:bg-brand-50 rounded-lg transition-all border border-transparent hover:border-brand-100 shadow-sm"
+                              title="Duplicar Receta"
+                            >
+                              <Copy size={14} />
                             </button>
                             <button
                               type="button"
@@ -383,6 +392,7 @@ export default function GestionRecetas() {
       {showModal && (
         <RecetaModal
           initialData={selectedItem}
+          isClone={isCloneMode}
           tipologias={tipologias}
           rubros={rubros}
           unidades={unidades}
