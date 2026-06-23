@@ -16,6 +16,10 @@ export async function getComedores(id_empresa) {
         tipo_servicio: tipos_servicios_comida(nombre),
         estructura: estructura_menu_base(nombre, slots: estructura_menu_base_slots(*)),
         slots_config: comedor_servicios_slots_config (*)
+      ),
+      perfiles_nutricionales: comedor_perfil_nutricional (
+        *,
+        tipo_servicio: tipos_servicios_comida(nombre)
       )
     `)
     .eq('id_empresa', id_empresa)
@@ -138,6 +142,47 @@ export async function saveComedorCompleto(comedorPayload, serviciosConfig, userI
 
         const { error: slotError } = await supabase.from('comedor_servicios_slots_config').insert(slotsToSave);
         if (slotError) throw slotError;
+      }
+
+      // Sincronizar perfil nutricional del servicio
+      if (cfg.perfil_nutricional) {
+        const { data: perfilExistente, error: errPerfil } = await supabase
+          .from('comedor_perfil_nutricional')
+          .select('id')
+          .eq('id_comedor', savedComedor.id)
+          .eq('id_tipo_servicio', idTipo)
+          .maybeSingle();
+
+        if (errPerfil) throw errPerfil;
+
+        const perfilPayload = {
+          id_comedor: savedComedor.id,
+          id_tipo_servicio: idTipo,
+          kcal_objetivo: Number(cfg.perfil_nutricional.kcal_objetivo) || 800,
+          carb_min_pct: Number(cfg.perfil_nutricional.carb_min_pct) || 50,
+          carb_max_pct: Number(cfg.perfil_nutricional.carb_max_pct) || 60,
+          prot_min_pct: Number(cfg.perfil_nutricional.prot_min_pct) || 15,
+          prot_max_pct: Number(cfg.perfil_nutricional.prot_max_pct) || 20,
+          grasa_min_pct: Number(cfg.perfil_nutricional.grasa_min_pct) || 25,
+          grasa_max_pct: Number(cfg.perfil_nutricional.grasa_max_pct) || 30,
+          id_usuario_update: userId,
+          timestamp_update: now
+        };
+
+        if (perfilExistente) {
+          const { error: updatePerfilErr } = await supabase
+            .from('comedor_perfil_nutricional')
+            .update(perfilPayload)
+            .eq('id', perfilExistente.id);
+          if (updatePerfilErr) throw updatePerfilErr;
+        } else {
+          perfilPayload.id_usuario_create = userId;
+          perfilPayload.timestamp_create = now;
+          const { error: insertPerfilErr } = await supabase
+            .from('comedor_perfil_nutricional')
+            .insert(perfilPayload);
+          if (insertPerfilErr) throw insertPerfilErr;
+        }
       }
     }
   }

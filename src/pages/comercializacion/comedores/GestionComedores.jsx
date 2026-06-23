@@ -118,7 +118,7 @@ export default function GestionComedores() {
           ))
         ) : filteredData.length > 0 ? (
           filteredData.map(com => (
-            <div key={com.id} className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm hover:shadow-xl transition-all p-8 flex flex-col gap-6 group relative overflow-hidden">
+            <div key={com.id} className="bg-white rounded-md border border-gray-100 shadow-sm hover:shadow-xl transition-all p-8 flex flex-col gap-6 group relative overflow-hidden">
               <div className="absolute top-0 right-0 w-32 h-32 bg-brand-50 rounded-full -mr-16 -mt-16 group-hover:scale-110 transition-transform" />
 
               <div className="flex justify-between items-start relative z-10">
@@ -140,13 +140,20 @@ export default function GestionComedores() {
               <div className="space-y-3 relative z-10">
                 <p className="text-[9px] font-black text-slate-300 uppercase tracking-[0.2em] mb-2">Servicios Configurados</p>
                 <div className="flex flex-wrap gap-2">
-                  {com.servicios_config?.filter(srv => srv.estatus !== false).map(srv => (
-                    <div key={srv.id} className="flex flex-col bg-slate-50 border border-slate-100 rounded-xl p-2.5 min-w-[90px] gap-0.5">
-                      <span className="text-[9px] font-black text-brand-900 uppercase truncate">{srv.tipo_servicio?.nombre}</span>
-                      <span className="text-[8px] font-bold text-slate-400 uppercase italic truncate">{srv.estructura?.nombre}</span>
-                      <span className="text-[10px] font-black text-brand-600 mt-1 font-mono">${Number(srv.precio_menu || 0).toFixed(2)}</span>
-                    </div>
-                  ))}
+                  {com.servicios_config?.filter(srv => srv.estatus !== false).map(srv => {
+                    const srvPerfil = com.perfiles_nutricionales?.find(p => p.id_tipo_servicio === srv.id_tipo_servicio);
+                    const kcal = srvPerfil ? `${Number(srvPerfil.kcal_objetivo).toFixed(0)} kcal` : '800 kcal (Def)';
+                    return (
+                      <div key={srv.id} className="flex flex-col bg-slate-50 border border-slate-100 rounded-xl p-2.5 min-w-[100px] gap-0.5 animate-in fade-in duration-300">
+                        <span className="text-[9px] font-black text-brand-900 uppercase truncate">{srv.tipo_servicio?.nombre}</span>
+                        <span className="text-[8px] font-bold text-slate-400 uppercase italic truncate">{srv.estructura?.nombre}</span>
+                        <div className="flex items-center justify-between mt-1 border-t border-slate-200/50 pt-1 gap-2">
+                          <span className="text-[10px] font-black text-brand-600 font-mono">${Number(srv.precio_menu || 0).toFixed(2)}</span>
+                          <span className="text-[8px] font-black bg-brand-50 text-brand-900 px-1 py-0.5 rounded font-mono truncate">{kcal}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
                   {(!com.servicios_config || com.servicios_config.filter(srv => srv.estatus !== false).length === 0) && (
                     <span className="text-[9px] font-bold text-red-400 italic">Sin servicios activos</span>
                   )}

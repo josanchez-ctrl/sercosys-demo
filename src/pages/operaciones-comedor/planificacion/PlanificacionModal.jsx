@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Save, CalendarDays, ChefHat, Plus, Trash2, Search, Utensils, Box, Check, Info, Calculator, Layers, AlertCircle, Users } from 'lucide-react';
+import { X, Save, CalendarDays, ChefHat, Plus, Trash2, Search, Utensils, Box, Check, Info, Calculator, Layers, AlertCircle, Users, Tag, AlertTriangle } from 'lucide-react';
 import { formatToISODate, formatToDDMMYYYYManual, getDayNameLong, getMonthNameShort, getWeekNumber } from '../../../util/workDate';
 import PlanificacionConsolidadaModal from './PlanificacionConsolidadaModal';
 
 import { getServiciosConfig, getRecetasDisponibles, getRubrosOperativos, getEstructuraSlots, getTipologias, upsertPlanificacionCompleta } from '../../../services/planificacionService';
+import { getPerfilNutricionalComedor, getReglasCompatibilidad } from '../../../services/nutricionService';
 import { Now } from '../../../services/nowService';
 
 export default function PlanificacionModal({
@@ -29,6 +30,10 @@ export default function PlanificacionModal({
   const [rubrosOperativos, setRubrosOperativos] = useState([]);
   const [tipologias, setTipologias] = useState([]);
 
+  // Nutritional states
+  const [perfilNutricional, setPerfilNutricional] = useState(null);
+  const [reglasCompatibilidad, setReglasCompatibilidad] = useState([]);
+
   const currentServicio = serviciosDisponibles.find(s => Number(s.id) === Number(internalServicioId));
   const [searchResults, setSearchResults] = useState([]);
   const [selectedDayIdx, setSelectedDayIdx] = useState(0);
@@ -43,17 +48,21 @@ export default function PlanificacionModal({
         const serv = serviciosDisponibles.find(s => Number(s.id) === Number(internalServicioId));
         const idEst = serv?.id_estructura_menu ? Number(serv.id_estructura_menu) : null;
 
-        const [recetasData, rubrosData, slotsData, tipsData] = await Promise.all([
+        const [recetasData, rubrosData, slotsData, tipsData, perfilData, reglasData] = await Promise.all([
           getRecetasDisponibles(empresaActiva.id),
           getRubrosOperativos(empresaActiva.id),
           idEst ? getEstructuraSlots(idEst) : Promise.resolve([]),
-          getTipologias()
+          getTipologias(),
+          getPerfilNutricionalComedor(comedorId, serv?.id_tipo_servicio),
+          getReglasCompatibilidad(empresaActiva.id)
         ]);
 
         setRecetas(recetasData || []);
         setRubrosOperativos(rubrosData || []);
         setSlots(slotsData || []);
         setTipologias(tipsData || []);
+        setPerfilNutricional(perfilData);
+        setReglasCompatibilidad(reglasData || []);
 
         // 1. Generar la cuadrícula completa (7 días x N slots) siempre
         const fullGrid = [];
@@ -96,6 +105,165 @@ export default function PlanificacionModal({
     };
     loadData();
   }, [plan, internalServicioId, serviciosDisponibles]);
+
+  const nutritionalSummary = useMemo(() => {
+    if (!recetas.length) return null;
+
+    const dateStr = formatToISODate(weekDays[selectedDayIdx]);
+    const dayEntries = detalleMenu.filter(d => d.fecha === dateStr && d.id_receta);
+    
+    const recipesInDay = dayEntries.map(entry => {
+      return recetas.find(rec => Number(rec.id) === Number(entry.id_receta));
+    }).filter(Boolean);
+
+    const recipesSinDatos = recipesInDay.filter(r => !Number(r.calorias) && !Number(r.proteinas_g) && !Number(r.carbohidratos_g) && !Number(r.grasas_g));
+    const recipesConDatos = recipesInDay.filter(r => Number(r.calorias) || Number(r.proteinas_g) || Number(r.carbohidratos_g) || Number(r.grasas_g));
+
+    let kcal = 0;
+    let prot = 0;
+    let carb = 0;
+    let grasa = 0;
+
+    recipesConDatos.forEach(r => {
+      kcal += Number(r.calorias) || 0;
+      prot += Number(r.proteinas_g) || 0;
+      carb += Number(r.carbohidratos_g) || 0;
+      grasa += Number(r.grasas_g) || 0;
+    });
+
+    const totalMacroKcal = (prot * 4) + (carb * 4) + (grasa * 9);
+    
+    // Percentages relative to total calories (or total macro calories if total calories is 0)
+    const divisor = kcal > 0 ? kcal : totalMacroKcal;
+    const protPct = divisor > 0 ? ((prot * 4) / divisor) * 100 : 0;
+    const carbPct = divisor > 0 ? ((carb * 4) / divisor) * 100 : 0;
+    const grasaPct = divisor > 0 ? ((grasa * 9) / divisor) * 100 : 0;
+
+    const warnings = [];
+    const allTags = [];
+    recipesInDay.forEach(r => {
+      const tagsList = r.receta_tags?.map(t => t.tag_code) || [];
+      allTags.push(...tagsList);
+    });
+
+    const recipesWithTag = (tagCode) => {
+      return recipesInDay.filter(r => r.receta_tags?.some(t => t.tag_code === tagCode));
+    };
+
+    reglasCompatibilidad.forEach(rule => {
+      if (!rule.estatus) return;
+      const config = rule.config || {};
+
+      if (rule.codigo_regla === 'REG_ACIDEZ' || config.tipo === 'CHOQUE_DIGESTIVO') {
+        const tagA = config.tag_a || 'LEGUMINOSA';
+        const tagB = config.tag_b || 'BEBIDA_ACIDA';
+        if (allTags.includes(tagA) && allTags.includes(tagB)) {
+          const listA = recipesWithTag(tagA).map(r => r.nombre);
+          const listB = recipesWithTag(tagB).map(r => r.nombre);
+          warnings.push({
+            codigo: rule.codigo_regla,
+            titulo: rule.nombre,
+            mensaje: `Se está sirviendo plato con ${tagA.toLowerCase()} (${listA.join(', ')}) junto con bebida ácida (${listB.join(', ')}). ${config.mensaje || rule.descripcion}`
+          });
+        }
+      }
+
+      if (rule.codigo_regla === 'REG_FRITURAS' || config.tipo === 'LIMITE_CANTIDAD') {
+        const tag = config.tag || 'FRITO';
+        const limitMax = Number(config.limite_max) || 2;
+        const matched = recipesWithTag(tag);
+        if (matched.length >= limitMax) {
+          warnings.push({
+            codigo: rule.codigo_regla,
+            titulo: rule.nombre,
+            mensaje: `Se detectaron platos fritos (${matched.map(r => r.nombre).join(', ')}). ${config.mensaje || rule.descripcion}`
+          });
+        }
+      }
+
+      if (rule.codigo_regla === 'REG_CARBO_TRIPLE' || config.tipo === 'CHOQUE_CARBOS') {
+        const tagCarbo = config.tag_carbo || 'ALTO_CARBO';
+        const tagEnsalada = config.tag_ensalada || 'ENSALADA_PESADA';
+        const carbRecipes = recipesWithTag(tagCarbo).concat(recipesWithTag('TUBERCULO_ALMIDON'));
+        const heavySaladRecipes = recipesWithTag(tagEnsalada);
+        const hasHeavySalad = heavySaladRecipes.length > 0;
+        const countCarbos = carbRecipes.length;
+        if (countCarbos >= 3 || (countCarbos >= 2 && hasHeavySalad)) {
+          const listCarbs = carbRecipes.map(r => r.nombre);
+          const listSalads = heavySaladRecipes.map(r => r.nombre);
+          warnings.push({
+            codigo: rule.codigo_regla,
+            titulo: rule.nombre,
+            mensaje: `Se combinaron carbohidratos (${listCarbs.join(', ')}) ${hasHeavySalad ? `con ensalada pesada cocida (${listSalads.join(', ')})` : ''}. ${config.mensaje || rule.descripcion}`
+          });
+        }
+      }
+
+      if (rule.codigo_regla === 'REG_GRASA_MAX' || config.tipo === 'LIMITE_MACRO') {
+        const limitPct = Number(config.limite_pct) || 35;
+        if (grasaPct > limitPct) {
+          warnings.push({
+            codigo: rule.codigo_regla,
+            titulo: rule.nombre,
+            mensaje: `El aporte de grasa es del ${grasaPct.toFixed(1)}% superando el ${limitPct}% recomendado. ${config.mensaje || rule.descripcion}`
+          });
+        }
+      }
+
+      if (rule.codigo_regla === 'REG_AZUCAR_MAX' || config.tipo === 'CHOQUE_AZUCAR') {
+        const tagBebida = config.tag_bebida || 'BEBIDA_DULCE';
+        const tagPostre = config.tag_postre || 'POSTRE_DULCE';
+        if (allTags.includes(tagBebida) && (allTags.includes(tagPostre) || allTags.includes('LACTEO_PESADO'))) {
+          const drinks = recipesWithTag(tagBebida).map(r => r.nombre);
+          const desserts = recipesWithTag(tagPostre).concat(recipesWithTag('LACTEO_PESADO')).map(r => r.nombre);
+          warnings.push({
+            codigo: rule.codigo_regla,
+            titulo: rule.nombre,
+            mensaje: `Se combina bebida muy dulce (${drinks.join(', ')}) con postre/lácteo dulce (${desserts.join(', ')}). ${config.mensaje || rule.descripcion}`
+          });
+        }
+      }
+
+      if (rule.codigo_regla === 'REG_SANCOCHO_OVERLOAD' || config.tag_sopa) {
+        const tagSopa = config.tag_sopa || 'SOPA_PESADA';
+        const tagCarbo = config.tag_carbo || 'ALTO_CARBO';
+        if (allTags.includes(tagSopa) && (allTags.includes(tagCarbo) || allTags.includes('TUBERCULO_ALMIDON'))) {
+          const listSopas = recipesWithTag(tagSopa).map(r => r.nombre);
+          const listCarbos = recipesWithTag(tagCarbo).concat(recipesWithTag('TUBERCULO_ALMIDON')).map(r => r.nombre);
+          warnings.push({
+            codigo: rule.codigo_regla,
+            titulo: rule.nombre,
+            mensaje: `Combinación densa: Se sirve sopa pesada (${listSopas.join(', ')}) junto con carbohidratos (${listCarbos.join(', ')}). ${config.mensaje || rule.descripcion}`
+          });
+        }
+      }
+
+      if (rule.codigo_regla === 'REG_SODIO_PROCESADO' || config.tag_procesado) {
+        const tagProcesado = config.tag_procesado || 'PROCESADO_EMBUTIDO';
+        const matchedProcesados = recipesWithTag(tagProcesado);
+        if (matchedProcesados.length > 0) {
+          warnings.push({
+            codigo: rule.codigo_regla,
+            titulo: rule.nombre,
+            mensaje: `Sodio / Ultraprocesados: Se incluyeron embutidos/procesados (${matchedProcesados.map(r => r.nombre).join(', ')}). ${config.mensaje || rule.descripcion}`
+          });
+        }
+      }
+    });
+
+    return {
+      kcal,
+      prot,
+      carb,
+      grasa,
+      protPct,
+      carbPct,
+      grasaPct,
+      recipesSinDatos,
+      recipesInDay,
+      warnings
+    };
+  }, [detalleMenu, weekDays, selectedDayIdx, recetas, reglasCompatibilidad]);
 
   const handleInitialSave = async (serviceId) => {
     setLoading(true);
@@ -193,7 +361,7 @@ export default function PlanificacionModal({
     <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 sm:p-6 overflow-hidden">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={onClose} />
 
-      <div className="relative bg-white w-full max-w-[98vw] h-full max-h-[98vh] rounded-[3rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-500">
+      <div className="relative bg-white w-full max-w-[98vw] h-full max-h-[98vh] rounded-md shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-500">
         {/* Cabecera Principal Compacta */}
         <div className="px-6 py-4 bg-white border-b border-slate-100 flex items-center justify-between z-20 shrink-0">
           <div className="flex items-center gap-4">
@@ -364,82 +532,236 @@ export default function PlanificacionModal({
                           .reduce((acc, d) => acc + (Number(d.comensales) || 0), 0);
 
                         return (
-                          <div className="max-w-4xl mx-auto space-y-4 animate-in fade-in slide-in-from-right-2 duration-300">
-                            <div className="bg-brand-50/50 border border-brand-100 p-4 rounded-3xl flex items-center justify-between mb-6">
-                              <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 bg-brand-900 rounded-xl flex items-center justify-center text-white shadow-lg">
-                                  <Users size={16} />
+                          <div className="flex flex-col lg:flex-row gap-8 animate-in fade-in slide-in-from-right-2 duration-300">
+                            {/* Slots Column (Left) */}
+                            <div className="flex-1 space-y-4">
+                              <div className="bg-brand-50/50 border border-brand-100 p-4 rounded-3xl flex items-center justify-between mb-6">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 bg-brand-900 rounded-xl flex items-center justify-center text-white shadow-lg">
+                                    <Users size={16} />
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] font-black text-brand-900 uppercase tracking-widest leading-none mb-1">Cupo Base del Día</p>
+                                    <p className="text-[9px] font-bold text-slate-400 italic">Total de comensales en platos base</p>
+                                  </div>
                                 </div>
-                                <div>
-                                  <p className="text-[10px] font-black text-brand-900 uppercase tracking-widest leading-none mb-1">Cupo Base del Día</p>
-                                  <p className="text-[9px] font-bold text-slate-400 italic">Total de comensales en platos base</p>
+                                <div className="text-right">
+                                  <p className="text-2xl font-black text-brand-900 leading-none">{totalBasePax}</p>
+                                  <p className="text-[8px] font-black uppercase text-brand-900/40">Pax Ref.</p>
                                 </div>
                               </div>
-                              <div className="text-right">
-                                <p className="text-2xl font-black text-brand-900 leading-none">{totalBasePax}</p>
-                                <p className="text-[8px] font-black uppercase text-brand-900/40">Pax Ref.</p>
+
+                              <div className="grid grid-cols-1 gap-2">
+                                {slots.map(slot => {
+                                  const isBase = baseSlotIds.includes(Number(slot.id));
+                                  const existing = dayEntries.find(d => Number(d.id_estructura_slot) === Number(slot.id));
+                                  const slotTipologias = slot.tipologias?.map(t => Number(t.id_tipologia)) || [];
+                                  const sameTypeEntries = dayEntries.filter(d => {
+                                    const dSlot = slots.find(s => Number(s.id) === Number(d.id_estructura_slot));
+                                    return dSlot?.tipologias?.some(t => slotTipologias.includes(Number(t.id_tipologia))) && Number(d.id_estructura_slot) !== Number(slot.id);
+                                  });
+                                  const currentOtherSum = sameTypeEntries.reduce((acc, d) => acc + (Number(d.comensales) || 0), 0);
+                                  const currentTotalPax = currentOtherSum + (Number(existing?.comensales) || 0);
+                                  const groupPercentage = totalBasePax > 0 ? Math.round((currentTotalPax / totalBasePax) * 100) : 0;
+                                  const maxAllowed = isBase ? 999999 : Math.max(0, totalBasePax - currentOtherSum);
+
+                                  return (
+                                    <div key={slot.id} className="flex flex-col sm:flex-row sm:items-center gap-4 group">
+                                      <div className="sm:w-44 shrink-0">
+                                        <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-2 rounded border block text-center sm:text-left truncate ${isBase ? 'bg-brand-900 text-white border-brand-900 shadow-md shadow-brand-900/10' : 'bg-brand-50 text-brand-900 border-brand-100'}`}>
+                                          {slot.nombre}
+                                        </span>
+                                      </div>
+                                      <div className="flex-1">
+                                        <SlotCell
+                                          entry={existing}
+                                          recetas={recetas}
+                                          tipologiasPermitidas={slotTipologias}
+                                          isReadOnly={!canEdit}
+                                          maxPax={maxAllowed}
+                                          totalBasePax={totalBasePax}
+                                          groupPercentage={groupPercentage}
+                                          isBase={isBase}
+                                          onChange={(updates) => {
+                                            if (updates.id_receta === '') {
+                                              updates.comensales = 0;
+                                            } else if (updates.id_receta) {
+                                              const currentPax = Number(existing?.comensales) || 0;
+                                              if (currentPax === 0) {
+                                                updates.comensales = isBase ? 1 : totalBasePax;
+                                              }
+                                            }
+                                            if (!existing) {
+                                              const newEntry = {
+                                                fecha: formatToISODate(weekDays[selectedDayIdx]),
+                                                id_estructura_slot: slot.id,
+                                                id_receta: '',
+                                                comensales: 0,
+                                                ajustes_ingredientes: {},
+                                                tempId: Math.random().toString(36).substr(2, 9)
+                                              };
+                                              setDetalleMenu([...detalleMenu, { ...newEntry, ...updates }]);
+                                            } else {
+                                              setDetalleMenu(detalleMenu.map(d => (Number(d.id_estructura_slot) === Number(slot.id) && d.fecha === dateStr) ? { ...d, ...updates } : d));
+                                            }
+                                          }}
+                                        />
+                                      </div>
+                                    </div>
+                                  );
+                                })}
                               </div>
                             </div>
 
-                            <div className="grid grid-cols-1 gap-2">
-                              {slots.map(slot => {
-                                const isBase = baseSlotIds.includes(Number(slot.id));
-                                const existing = dayEntries.find(d => Number(d.id_estructura_slot) === Number(slot.id));
-                                const slotTipologias = slot.tipologias?.map(t => Number(t.id_tipologia)) || [];
-                                const sameTypeEntries = dayEntries.filter(d => {
-                                  const dSlot = slots.find(s => Number(s.id) === Number(d.id_estructura_slot));
-                                  return dSlot?.tipologias?.some(t => slotTipologias.includes(Number(t.id_tipologia))) && Number(d.id_estructura_slot) !== Number(slot.id);
-                                });
-                                const currentOtherSum = sameTypeEntries.reduce((acc, d) => acc + (Number(d.comensales) || 0), 0);
-                                const currentTotalPax = currentOtherSum + (Number(existing?.comensales) || 0);
-                                const groupPercentage = totalBasePax > 0 ? Math.round((currentTotalPax / totalBasePax) * 100) : 0;
-                                const maxAllowed = isBase ? 999999 : Math.max(0, totalBasePax - currentOtherSum);
+                            {/* Nutrition Panel (Right) */}
+                            <div className="w-full lg:w-[320px] shrink-0 border-t lg:border-t-0 lg:border-l border-slate-100 pt-6 lg:pt-0 lg:pl-6 space-y-6">
+                              
+                              {/* Alertas Gastronómicas */}
+                              {nutritionalSummary?.warnings && nutritionalSummary.warnings.length > 0 ?(
+                                <div className="space-y-2.5">
+                                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Compatibilidad y Alertas</span>
+                                  
+                                    <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1 custom-scrollbar">
+                                      {nutritionalSummary.warnings.map((warn, index) => (
+                                        <div key={index} className="bg-amber-50/50 border border-amber-200 p-3 rounded-xl flex items-start gap-2.5">
+                                          <AlertTriangle className="text-amber-600 shrink-0 mt-0.5" size={14} />
+                                          <div className="flex-1">
+                                            <p className="text-[9px] font-black text-amber-800 uppercase tracking-tight leading-tight mb-0.5">{warn.titulo}</p>
+                                            <p className="text-[8px] font-bold text-amber-700 leading-normal italic">{warn.mensaje}</p>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                </div>
+                                ):(null)}
+
+                              <div>
+                                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-1">Balance del Día</h4>
+                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider italic">Control y Coherencia Alimentaria</p>
+                              </div>
+
+                              {/* KPI Calorías */}
+                              {(() => {
+                                const kcalTarget = perfilNutricional?.kcal_objetivo || 800;
+                                const kcalActual = nutritionalSummary?.kcal || 0;
+                                const pctCal = kcalTarget > 0 ? Math.min(100, Math.round((kcalActual / kcalTarget) * 100)) : 0;
+                                
+                                let colorBar = 'bg-slate-350';
+                                let colorText = 'text-slate-500';
+                                if (kcalActual > 0) {
+                                  const diff = Math.abs(kcalActual - kcalTarget);
+                                  if (diff <= kcalTarget * 0.1) {
+                                    colorBar = 'bg-emerald-500';
+                                    colorText = 'text-emerald-600';
+                                  } else if (kcalActual < kcalTarget) {
+                                    colorBar = 'bg-amber-500';
+                                    colorText = 'text-amber-600';
+                                  } else {
+                                    colorBar = 'bg-red-500';
+                                    colorText = 'text-red-600';
+                                  }
+                                }
 
                                 return (
-                                  <div key={slot.id} className="flex flex-col sm:flex-row sm:items-center gap-4 group">
-                                    <div className="sm:w-44 shrink-0">
-                                      <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-2 rounded border block text-center sm:text-left truncate ${isBase ? 'bg-brand-900 text-white border-brand-900 shadow-md shadow-brand-900/10' : 'bg-brand-50 text-brand-900 border-brand-100'}`}>
-                                        {slot.nombre}
-                                      </span>
+                                  <div className="bg-slate-50/50 border border-slate-100 p-4 rounded-2xl">
+                                    <div className="flex items-center justify-between mb-1.5">
+                                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Aporte Calórico</span>
+                                      <span className={`text-xs font-black ${colorText}`}>{kcalActual} / {kcalTarget} kcal</span>
                                     </div>
-                                    <div className="flex-1">
-                                      <SlotCell
-                                        entry={existing}
-                                        recetas={recetas}
-                                        tipologiasPermitidas={slotTipologias}
-                                        isReadOnly={!canEdit}
-                                        maxPax={maxAllowed}
-                                        totalBasePax={totalBasePax}
-                                        groupPercentage={groupPercentage}
-                                        isBase={isBase}
-                                        onChange={(updates) => {
-                                          if (updates.id_receta === '') {
-                                            updates.comensales = 0;
-                                          } else if (updates.id_receta) {
-                                            const currentPax = Number(existing?.comensales) || 0;
-                                            if (currentPax === 0) {
-                                              updates.comensales = isBase ? 1 : totalBasePax;
-                                            }
-                                          }
-                                          if (!existing) {
-                                            const newEntry = {
-                                              fecha: formatToISODate(weekDays[selectedDayIdx]),
-                                              id_estructura_slot: slot.id,
-                                              id_receta: '',
-                                              comensales: 0,
-                                              ajustes_ingredientes: {},
-                                              tempId: Math.random().toString(36).substr(2, 9)
-                                            };
-                                            setDetalleMenu([...detalleMenu, { ...newEntry, ...updates }]);
-                                          } else {
-                                            setDetalleMenu(detalleMenu.map(d => (Number(d.id_estructura_slot) === Number(slot.id) && d.fecha === dateStr) ? { ...d, ...updates } : d));
-                                          }
-                                        }}
-                                      />
+                                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                                      <div className={`h-full transition-all duration-500 ${colorBar}`} style={{ width: `${pctCal}%` }} />
                                     </div>
+                                    {kcalActual > 0 && (
+                                      <p className="text-[8px] font-bold text-slate-400 mt-1 italic">
+                                        {pctCal}% de la meta recomendada
+                                      </p>
+                                    )}
                                   </div>
                                 );
-                              })}
+                              })()}
+
+                              {/* Macronutrientes */}
+                              <div className="space-y-3">
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Distribución de Macros</span>
+                                
+                                {/* Carbohidratos */}
+                                {(() => {
+                                  const min = perfilNutricional?.carb_min_pct || 50;
+                                  const max = perfilNutricional?.carb_max_pct || 60;
+                                  const act = nutritionalSummary?.carbPct || 0;
+                                  const inRange = act >= min && act <= max;
+                                  return (
+                                    <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm space-y-1">
+                                      <div className="flex items-center justify-between text-[10px]">
+                                        <span className="font-black text-slate-700">🍞 Carbohidratos</span>
+                                        <span className={`font-black ${act > 0 ? (inRange ? 'text-emerald-600' : 'text-amber-600') : 'text-slate-400'}`}>
+                                          {act.toFixed(1)}% <span className="text-[8px] font-normal text-slate-400">({min}-{max}%)</span>
+                                        </span>
+                                      </div>
+                                      <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                                        <div className={`h-full transition-all duration-500 ${act > 0 ? (inRange ? 'bg-emerald-500' : 'bg-amber-400') : 'bg-slate-200'}`} style={{ width: `${Math.min(100, act)}%` }} />
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
+
+                                {/* Proteínas */}
+                                {(() => {
+                                  const min = perfilNutricional?.prot_min_pct || 15;
+                                  const max = perfilNutricional?.prot_max_pct || 20;
+                                  const act = nutritionalSummary?.protPct || 0;
+                                  const inRange = act >= min && act <= max;
+                                  return (
+                                    <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm space-y-1">
+                                      <div className="flex items-center justify-between text-[10px]">
+                                        <span className="font-black text-slate-700">🥩 Proteínas</span>
+                                        <span className={`font-black ${act > 0 ? (inRange ? 'text-emerald-600' : 'text-amber-600') : 'text-slate-400'}`}>
+                                          {act.toFixed(1)}% <span className="text-[8px] font-normal text-slate-400">({min}-{max}%)</span>
+                                        </span>
+                                      </div>
+                                      <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                                        <div className={`h-full transition-all duration-500 ${act > 0 ? (inRange ? 'bg-emerald-500' : 'bg-amber-400') : 'bg-slate-200'}`} style={{ width: `${Math.min(100, act)}%` }} />
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
+
+                                {/* Grasas */}
+                                {(() => {
+                                  const min = perfilNutricional?.grasa_min_pct || 25;
+                                  const max = perfilNutricional?.grasa_max_pct || 30;
+                                  const act = nutritionalSummary?.grasaPct || 0;
+                                  const inRange = act >= min && act <= max;
+                                  return (
+                                    <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm space-y-1">
+                                      <div className="flex items-center justify-between text-[10px]">
+                                        <span className="font-black text-slate-700">🥑 Grasas</span>
+                                        <span className={`font-black ${act > 0 ? (inRange ? 'text-emerald-600' : 'text-amber-600') : 'text-slate-400'}`}>
+                                          {act.toFixed(1)}% <span className="text-[8px] font-normal text-slate-400">({min}-{max}%)</span>
+                                        </span>
+                                      </div>
+                                      <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                                        <div className={`h-full transition-all duration-500 ${act > 0 ? (inRange ? 'bg-emerald-500' : 'bg-amber-400') : 'bg-slate-200'}`} style={{ width: `${Math.min(100, act)}%` }} />
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
+                              </div>
+
+                              {/* Omitidos de cálculo (Sin Datos) */}
+                              {nutritionalSummary?.recipesSinDatos && nutritionalSummary.recipesSinDatos.length > 0 && (
+                                <div className="bg-slate-50 border border-slate-150 p-3 rounded-xl space-y-1">
+                                  <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block">⚠️ Omitidos (Sin Datos)</span>
+                                  <ul className="space-y-0.5">
+                                    {nutritionalSummary.recipesSinDatos.map(r => (
+                                      <li key={r.id} className="text-[8px] font-bold text-slate-500 list-disc list-inside uppercase truncate">
+                                        {r.nombre} (Sin datos)
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+
                             </div>
                           </div>
                         );

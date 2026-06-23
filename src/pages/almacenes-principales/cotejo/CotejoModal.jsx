@@ -129,10 +129,19 @@ export default function CotejoModal({ initialData = null, empresaActiva, almacen
     onSubmit: executeSave
   });
 
-  const isCatchWeightWarehouse = useMemo(() => {
+  const isFrigorifico = useMemo(() => {
     const aid = Number(almacenSel?.id || initialData?.id_almacen || formik.values.id_almacen);
-    return aid === 2 || aid === 3;
+    return aid === 2;
   }, [almacenSel?.id, initialData?.id_almacen, formik.values.id_almacen]);
+
+  const isMayorista = useMemo(() => {
+    const aid = Number(almacenSel?.id || initialData?.id_almacen || formik.values.id_almacen);
+    return aid === 3;
+  }, [almacenSel?.id, initialData?.id_almacen, formik.values.id_almacen]);
+
+  const isCatchWeightWarehouse = useMemo(() => {
+    return isFrigorifico || isMayorista;
+  }, [isFrigorifico, isMayorista]);
 
   const fetchMaestros = async () => {
     setLoadingMaestros(true);
@@ -296,11 +305,24 @@ export default function CotejoModal({ initialData = null, empresaActiva, almacen
           d.id_presentacion_logistica === targetPresLog
         );
         if (index >= 0) {
-          const currentQty = Number(formik.values.detalles[index].cantidad) || 0;
-          const newQty = currentQty + 1;
           const factor = Number(formik.values.detalles[index].factor) || 1;
-          formik.setFieldValue(`detalles.${index}.cantidad`, newQty);
-          formik.setFieldValue(`detalles.${index}.peso_neto_real`, Number((newQty * factor).toFixed(4)));
+          if (isMayorista) {
+            const currentPeso = Number(formik.values.detalles[index].peso_neto_real) || 0;
+            const newPeso = Number((currentPeso + factor).toFixed(4));
+            formik.setFieldValue(`detalles.${index}.peso_neto_real`, newPeso);
+            formik.setFieldValue(`detalles.${index}.cantidad_factura`, newPeso);
+          } else {
+            const currentQty = Number(formik.values.detalles[index].cantidad) || 0;
+            const newQty = currentQty + 1;
+            formik.setFieldValue(`detalles.${index}.cantidad`, newQty);
+            formik.setFieldValue(`detalles.${index}.peso_neto_real`, Number((newQty * factor).toFixed(4)));
+            if (!isCatchWeightWarehouse) {
+              formik.setFieldValue(`detalles.${index}.cantidad_factura`, newQty);
+            } else {
+              const currentFact = Number(formik.values.detalles[index].cantidad_factura) || 0;
+              formik.setFieldValue(`detalles.${index}.cantidad_factura`, Number((currentFact + factor).toFixed(4)));
+            }
+          }
         }
         setTimeout(() => searchInputRef.current?.focus(), 100);
         return;
@@ -312,11 +334,24 @@ export default function CotejoModal({ initialData = null, empresaActiva, almacen
         );
 
         if (emptyLotIndex >= 0) {
-          const currentQty = Number(formik.values.detalles[emptyLotIndex].cantidad) || 0;
-          const newQty = currentQty + 1;
           const factor = Number(formik.values.detalles[emptyLotIndex].factor) || 1;
-          formik.setFieldValue(`detalles.${emptyLotIndex}.cantidad`, newQty);
-          formik.setFieldValue(`detalles.${emptyLotIndex}.peso_neto_real`, Number((newQty * factor).toFixed(4)));
+          if (isMayorista) {
+            const currentPeso = Number(formik.values.detalles[emptyLotIndex].peso_neto_real) || 0;
+            const newPeso = Number((currentPeso + factor).toFixed(4));
+            formik.setFieldValue(`detalles.${emptyLotIndex}.peso_neto_real`, newPeso);
+            formik.setFieldValue(`detalles.${emptyLotIndex}.cantidad_factura`, newPeso);
+          } else {
+            const currentQty = Number(formik.values.detalles[emptyLotIndex].cantidad) || 0;
+            const newQty = currentQty + 1;
+            formik.setFieldValue(`detalles.${emptyLotIndex}.cantidad`, newQty);
+            formik.setFieldValue(`detalles.${emptyLotIndex}.peso_neto_real`, Number((newQty * factor).toFixed(4)));
+            if (!isCatchWeightWarehouse) {
+              formik.setFieldValue(`detalles.${emptyLotIndex}.cantidad_factura`, newQty);
+            } else {
+              const currentFact = Number(formik.values.detalles[emptyLotIndex].cantidad_factura) || 0;
+              formik.setFieldValue(`detalles.${emptyLotIndex}.cantidad_factura`, Number((currentFact + factor).toFixed(4)));
+            }
+          }
           setTimeout(() => searchInputRef.current?.focus(), 100);
           return;
         }
@@ -328,7 +363,7 @@ export default function CotejoModal({ initialData = null, empresaActiva, almacen
       id_producto: p.id,
       id_almacen: p.rubro?.categoria?.id_almacen,
       cantidad: 1,
-      cantidad_factura: 1,
+      cantidad_factura: isCatchWeightWarehouse ? theoreticalFactor : 1,
       lote: '',
       fecha_vencimiento: '',
       id_validacion_color: 1,
@@ -337,7 +372,7 @@ export default function CotejoModal({ initialData = null, empresaActiva, almacen
       id_presentacion_logistica: p.id_presentacion_logistica || null,
       id_presentacion: p.specificPresentation?.id || p.presentacion?.id || null,
       factor: theoreticalFactor,
-      peso_neto_real: theoreticalFactor, // quantity = 1, so peso_neto_real = theoreticalFactor
+      peso_neto_real: theoreticalFactor,
       matchedBarcode: p.matchedBarcode,
       producto_info: {
         ...p,
@@ -631,11 +666,13 @@ export default function CotejoModal({ initialData = null, empresaActiva, almacen
                     <tr className="bg-gray-50/80">
                       <th className="px-2 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-gray-100">Producto</th>
                       <th className={`px-2 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-gray-100 ${isCatchWeightWarehouse ? 'w-64' : 'w-32'}`}>
-                        {isCatchWeightWarehouse ? 'Cant. & Peso Real' : 'Unidad'}
+                        {isFrigorifico ? 'Cant. & Peso Real' : isMayorista ? 'Peso Real' : 'Unidad'}
                       </th>
-                      <th className="px-2 py-5 text-[10px] font-black uppercase tracking-widest border-b border-gray-100 w-48 bg-blue-50/40 text-blue-800">
-                        {isCatchWeightWarehouse ? 'Peso Factura' : 'Cant. Factura'}
-                      </th>
+                      {isCatchWeightWarehouse && (
+                        <th className="px-2 py-5 text-[10px] font-black uppercase tracking-widest border-b border-gray-100 w-48 bg-blue-50/40 text-blue-800">
+                          Peso Factura
+                        </th>
+                      )}
                       <th className="px-2 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-gray-100 w-40 text-center">Organoléptico</th>
                       <th className="px-2 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-gray-100 w-44">Lote / Vence</th>
                       {!isFinalizado && <th className="px-2 py-5 text-right w-16" />}
@@ -644,7 +681,7 @@ export default function CotejoModal({ initialData = null, empresaActiva, almacen
                   <tbody className="divide-y divide-gray-300">
                     {(formik.values.detalles?.length || 0) === 0 ? (
                       <tr>
-                        <td colSpan={7} className="px-8 py-20 text-center">
+                        <td colSpan={isCatchWeightWarehouse ? 7 : 6} className="px-8 py-20 text-center">
                           <div className="flex flex-col items-center opacity-20">
                             <Package size={48} className="mb-4 text-brand-900" />
                             <p className="text-sm font-bold uppercase tracking-widest">Lista de productos vacía</p>
@@ -693,33 +730,35 @@ export default function CotejoModal({ initialData = null, empresaActiva, almacen
                             <td className="px-2 py-1">
                               {isCatchWeightWarehouse ? (
                                 <div className="flex gap-2">
-                                  <div className="flex-1 min-w-[70px]">
-                                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-tight block mb-1">Pzas/Bultos</span>
-                                    <input
-                                      type="number"
-                                      min={1}
-                                      step={1}
-                                      disabled={!canEditQuantities}
-                                      value={d.cantidad}
-                                      onChange={(e) => {
-                                        let val = e.target.value;
-                                        const fraccionamiento = d.producto_info?.rubro?.tipo_fraccionamiento;
-                                        if (fraccionamiento === 'NUNCA' || fraccionamiento === 'SOLO_EJECUCION') {
-                                          if (val !== '') {
-                                            val = Math.floor(Number(val)).toString();
+                                  {isFrigorifico && (
+                                    <div className="flex-1 min-w-[70px]">
+                                      <span className="text-[8px] font-black text-slate-400 uppercase tracking-tight block mb-1">Pzas/Bultos</span>
+                                      <input
+                                        type="number"
+                                        min={1}
+                                        step={1}
+                                        disabled={!canEditQuantities}
+                                        value={d.cantidad}
+                                        onChange={(e) => {
+                                          let val = e.target.value;
+                                          const fraccionamiento = d.producto_info?.rubro?.tipo_fraccionamiento;
+                                          if (fraccionamiento === 'NUNCA' || fraccionamiento === 'SOLO_EJECUCION') {
+                                            if (val !== '') {
+                                              val = Math.floor(Number(val)).toString();
+                                            }
                                           }
-                                        }
-                                        const numCant = Number(val) || 0;
-                                        const theoreticalFactor = Number(d.logistica?.factor || d.producto_info?.factor || 1);
-                                        const newPesoReal = Number((numCant * theoreticalFactor).toFixed(4));
-                                        
-                                        formik.setFieldValue(`detalles.${idx}.cantidad`, val);
-                                        formik.setFieldValue(`detalles.${idx}.peso_neto_real`, newPesoReal);
-                                        formik.setFieldValue(`detalles.${idx}.factor`, theoreticalFactor);
-                                      }}
-                                      className="w-full px-2 py-1.5 bg-gray-50 border border-gray-100 rounded-xl text-xs font-black text-slate-700 outline-none focus:ring-2 focus:ring-brand-accent/20 focus:border-brand-accent transition-all disabled:opacity-30"
-                                    />
-                                  </div>
+                                          const numCant = Number(val) || 0;
+                                          const theoreticalFactor = Number(d.logistica?.factor || d.producto_info?.factor || 1);
+                                          const newPesoReal = Number((numCant * theoreticalFactor).toFixed(4));
+                                          
+                                          formik.setFieldValue(`detalles.${idx}.cantidad`, val);
+                                          formik.setFieldValue(`detalles.${idx}.peso_neto_real`, newPesoReal);
+                                          formik.setFieldValue(`detalles.${idx}.factor`, theoreticalFactor);
+                                        }}
+                                        className="w-full px-2 py-1.5 bg-gray-50 border border-gray-100 rounded-xl text-xs font-black text-slate-700 outline-none focus:ring-2 focus:ring-brand-accent/20 focus:border-brand-accent transition-all disabled:opacity-30"
+                                      />
+                                    </div>
+                                  )}
                                   <div className="flex-1 min-w-[90px]">
                                     <span className="text-[8px] font-black text-slate-400 uppercase tracking-tight block mb-1">
                                       Peso {p?.rubro?.almacen_unidades_medida?.abreviatura || 'KG'} Real
@@ -733,15 +772,19 @@ export default function CotejoModal({ initialData = null, empresaActiva, almacen
                                       onChange={(e) => {
                                         const val = e.target.value;
                                         const numPeso = Number(val) || 0;
-                                        const numCant = Number(d.cantidad) || 0;
-                                        
-                                        let newFactor = Number(d.logistica?.factor || d.producto_info?.factor || 1);
-                                        if (numCant > 0) {
-                                          newFactor = numPeso / numCant;
+                                        if (isMayorista) {
+                                          formik.setFieldValue(`detalles.${idx}.cantidad`, 1);
+                                          formik.setFieldValue(`detalles.${idx}.peso_neto_real`, val);
+                                          formik.setFieldValue(`detalles.${idx}.factor`, numPeso);
+                                        } else {
+                                          const numCant = Number(d.cantidad) || 0;
+                                          let newFactor = Number(d.logistica?.factor || d.producto_info?.factor || 1);
+                                          if (numCant > 0) {
+                                            newFactor = numPeso / numCant;
+                                          }
+                                          formik.setFieldValue(`detalles.${idx}.peso_neto_real`, val);
+                                          formik.setFieldValue(`detalles.${idx}.factor`, newFactor);
                                         }
-                                        
-                                        formik.setFieldValue(`detalles.${idx}.peso_neto_real`, val);
-                                        formik.setFieldValue(`detalles.${idx}.factor`, newFactor);
                                       }}
                                       className="w-full px-2 py-1.5 bg-white border border-brand-200 rounded-xl text-xs font-black text-brand-900 outline-none focus:ring-2 focus:ring-brand-accent/20 focus:border-brand-accent transition-all disabled:opacity-30"
                                     />
@@ -764,6 +807,9 @@ export default function CotejoModal({ initialData = null, empresaActiva, almacen
                                         }
                                       }
                                       formik.setFieldValue(`detalles.${idx}.cantidad`, val);
+                                      if (!isCatchWeightWarehouse) {
+                                        formik.setFieldValue(`detalles.${idx}.cantidad_factura`, val);
+                                      }
                                     }}
                                     className="w-full px-3 py-2 bg-gray-50 border border-gray-100 rounded-xl text-sm font-black text-slate-700 outline-none focus:ring-4 focus:ring-brand-accent/5 focus:border-brand-accent transition-all disabled:opacity-30"
                                   />
@@ -773,37 +819,39 @@ export default function CotejoModal({ initialData = null, empresaActiva, almacen
                                 </>
                               )}
                             </td>
-                            <td className="px-2 py-1 bg-blue-50/10">
-                              <div className="flex flex-col w-full">
-                                <input
-                                  type="number"
-                                  min={0.01}
-                                  step={0.001}
-                                  disabled={!canEditQuantities}
-                                  value={d.cantidad_factura || ''}
-                                  onChange={(e) => {
-                                    const val = e.target.value;
-                                    formik.setFieldValue(`detalles.${idx}.cantidad_factura`, val);
-                                  }}
-                                  className="w-full px-2 py-1.5 bg-white border border-blue-200 rounded-xl text-xs font-black text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all disabled:opacity-30 text-right"
-                                  placeholder={isCatchWeightWarehouse ? "Peso Fact." : "Cant. Fact."}
-                                />
-                                {(() => {
-                                  const pesoFact = Number(d.cantidad_factura) || 0;
-                                  const pesoRec = isCatchWeightWarehouse ? (Number(d.peso_neto_real) || 0) : (Number(d.cantidad) || 0);
-                                  if (pesoFact > pesoRec && pesoFact > 0) {
-                                    const diff = pesoFact - pesoRec;
-                                    const pct = (diff / pesoFact) * 100;
-                                    return (
-                                      <span className="text-[9px] font-bold text-red-500 block mt-1 text-center bg-red-50 rounded px-1 py-0.5 border border-red-100">
-                                        Merma: -{diff.toFixed(2)} {isCatchWeightWarehouse ? 'KG' : 'Blt'} ({pct.toFixed(1)}%)
-                                      </span>
-                                    );
-                                  }
-                                  return null;
-                                })()}
-                              </div>
-                            </td>
+                            {isCatchWeightWarehouse && (
+                              <td className="px-2 py-1 bg-blue-50/10">
+                                <div className="flex flex-col w-full">
+                                  <input
+                                    type="number"
+                                    min={0.01}
+                                    step={0.001}
+                                    disabled={!canEditQuantities}
+                                    value={d.cantidad_factura || ''}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      formik.setFieldValue(`detalles.${idx}.cantidad_factura`, val);
+                                    }}
+                                    className="w-full px-2 py-1.5 bg-white border border-blue-200 rounded-xl text-xs font-black text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all disabled:opacity-30 text-right"
+                                    placeholder="Peso Fact."
+                                  />
+                                  {(() => {
+                                    const pesoFact = Number(d.cantidad_factura) || 0;
+                                    const pesoRec = Number(d.peso_neto_real) || 0;
+                                    if (pesoFact > pesoRec && pesoFact > 0) {
+                                      const diff = pesoFact - pesoRec;
+                                      const pct = (diff / pesoFact) * 100;
+                                      return (
+                                        <span className="text-[9px] font-bold text-red-500 block mt-1 text-center bg-red-50 rounded px-1 py-0.5 border border-red-100">
+                                          Merma: -{diff.toFixed(2)} KG ({pct.toFixed(1)}%)
+                                        </span>
+                                      );
+                                    }
+                                    return null;
+                                  })()}
+                                </div>
+                              </td>
+                            )}
                             <td className="px-2 py-1">
                               <div className="w-full flex flex-col gap-1.5 items-center">
                                 {['color', 'olor', 'textura'].map((field) => {

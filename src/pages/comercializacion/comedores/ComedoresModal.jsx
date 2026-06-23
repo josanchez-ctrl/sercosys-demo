@@ -8,7 +8,34 @@ import { saveComedorCompleto } from '../../../services/comedorService';
 const validationSchema = Yup.object({
   nombre: Yup.string().required('El nombre es obligatorio'),
   id_sucursal: Yup.string().required('Debe seleccionar una sucursal'),
-  servicios: Yup.array().min(1, 'Debe activar al menos un servicio')
+  servicios: Yup.array().of(
+    Yup.object().shape({
+      id_tipo_servicio: Yup.mixed().required(),
+      id_estructura_menu: Yup.mixed().required('Seleccione una clasificación'),
+      precio_menu: Yup.number().min(0, 'Mínimo 0').required('Requerido'),
+      perfil_nutricional: Yup.object().shape({
+        kcal_objetivo: Yup.number().positive('Debe ser > 0').required('Requerido'),
+        carb_min_pct: Yup.number().min(0, 'Mínimo 0').max(100, 'Máximo 100').required('Requerido'),
+        carb_max_pct: Yup.number().min(0, 'Mínimo 0').max(100, 'Máximo 100')
+          .test('compare-carbs', 'El máximo debe ser mayor o igual al mínimo', function(value) {
+            const { carb_min_pct } = this.parent;
+            return value >= carb_min_pct;
+          }).required('Requerido'),
+        prot_min_pct: Yup.number().min(0, 'Mínimo 0').max(100, 'Máximo 100').required('Requerido'),
+        prot_max_pct: Yup.number().min(0, 'Mínimo 0').max(100, 'Máximo 100')
+          .test('compare-prots', 'El máximo debe ser mayor o igual al mínimo', function(value) {
+            const { prot_min_pct } = this.parent;
+            return value >= prot_min_pct;
+          }).required('Requerido'),
+        grasa_min_pct: Yup.number().min(0, 'Mínimo 0').max(100, 'Máximo 100').required('Requerido'),
+        grasa_max_pct: Yup.number().min(0, 'Mínimo 0').max(100, 'Máximo 100')
+          .test('compare-grasas', 'El máximo debe ser mayor o igual al mínimo', function(value) {
+            const { grasa_min_pct } = this.parent;
+            return value >= grasa_min_pct;
+          }).required('Requerido')
+      })
+    })
+  ).min(1, 'Debe activar al menos un servicio')
 });
 
 export default function ComedoresModal({
@@ -29,6 +56,7 @@ export default function ComedoresModal({
   // Mapear servicios configurados si existen
   const initialServicios = initialData?.servicios_config?.map(s => {
     const est = estructuras.find(e => e.id === s.id_estructura_menu);
+    const srvPerfil = initialData?.perfiles_nutricionales?.find(p => p.id_tipo_servicio === s.id_tipo_servicio);
     return {
       id_tipo_servicio: s.id_tipo_servicio,
       id_estructura_menu: s.id_estructura_menu,
@@ -40,7 +68,16 @@ export default function ComedoresModal({
           cantidad_objetivo: saved?.cantidad_objetivo || 0,
           id_unidad_medida: saved?.id_unidad_medida || slot.id_unidad_medida || null
         };
-      }) || []
+      }) || [],
+      perfil_nutricional: {
+        kcal_objetivo: srvPerfil?.kcal_objetivo || 800.00,
+        carb_min_pct: srvPerfil?.carb_min_pct || 50.00,
+        carb_max_pct: srvPerfil?.carb_max_pct || 60.00,
+        prot_min_pct: srvPerfil?.prot_min_pct || 15.00,
+        prot_max_pct: srvPerfil?.prot_max_pct || 20.00,
+        grasa_min_pct: srvPerfil?.grasa_min_pct || 25.00,
+        grasa_max_pct: srvPerfil?.grasa_max_pct || 30.00
+      }
     };
   }) || [];
 
@@ -83,7 +120,16 @@ export default function ComedoresModal({
           id_slot: slot.id,
           cantidad_objetivo: 0,
           id_unidad_medida: slot.id_unidad_medida || null
-        })) || []
+        })) || [],
+        perfil_nutricional: {
+          kcal_objetivo: 800.00,
+          carb_min_pct: 50.00,
+          carb_max_pct: 60.00,
+          prot_min_pct: 15.00,
+          prot_max_pct: 20.00,
+          grasa_min_pct: 25.00,
+          grasa_max_pct: 30.00
+        }
       });
       setExpandedService(tipoServicioId);
     } else {
@@ -93,42 +139,85 @@ export default function ComedoresModal({
     formik.setFieldValue('servicios', current);
   };
 
+  const updatePerfilField = (tipoServicioId, field, value) => {
+    const current = formik.values.servicios.map(s => {
+      if (s.id_tipo_servicio === tipoServicioId) {
+        const perf = s.perfil_nutricional || {
+          kcal_objetivo: 800.00,
+          carb_min_pct: 50.00,
+          carb_max_pct: 60.00,
+          prot_min_pct: 15.00,
+          prot_max_pct: 20.00,
+          grasa_min_pct: 25.00,
+          grasa_max_pct: 30.00
+        };
+        return {
+          ...s,
+          perfil_nutricional: {
+            ...perf,
+            [field]: value
+          }
+        };
+      }
+      return s;
+    });
+    formik.setFieldValue('servicios', current);
+  };
+
   const updateEstructura = (tipoServicioId, estructuraId) => {
-    const current = [...formik.values.servicios];
-    const index = current.findIndex(s => s.id_tipo_servicio === tipoServicioId);
-    if (index !== -1) {
-      const selectedEst = estructuras.find(e => e.id.toString() === estructuraId.toString());
-      current[index].id_estructura_menu = estructuraId;
-      // Reiniciar slots_config para la nueva estructura
-      current[index].slots_config = selectedEst?.slots?.map(slot => ({
-        id_slot: slot.id,
-        cantidad_objetivo: 0,
-        id_unidad_medida: slot.id_unidad_medida || null
-      })) || [];
-      formik.setFieldValue('servicios', current);
-    }
+    const selectedEst = estructuras.find(e => e.id.toString() === estructuraId.toString());
+    const current = formik.values.servicios.map(s => {
+      if (s.id_tipo_servicio === tipoServicioId) {
+        return {
+          ...s,
+          id_estructura_menu: estructuraId,
+          slots_config: selectedEst?.slots?.map(slot => ({
+            id_slot: slot.id,
+            cantidad_objetivo: 0,
+            id_unidad_medida: slot.id_unidad_medida || null
+          })) || []
+        };
+      }
+      return s;
+    });
+    formik.setFieldValue('servicios', current);
   };
 
   const updateSlotGramaje = (tipoServicioId, slotId, field, value) => {
-    const current = [...formik.values.servicios];
-    const sIdx = current.findIndex(s => s.id_tipo_servicio === tipoServicioId);
-    if (sIdx !== -1) {
-      const slotIdx = current[sIdx].slots_config.findIndex(sc => sc.id_slot === slotId);
-      if (slotIdx !== -1) {
-        current[sIdx].slots_config[slotIdx][field] = value;
-        formik.setFieldValue('servicios', current);
+    const current = formik.values.servicios.map(s => {
+      if (s.id_tipo_servicio === tipoServicioId) {
+        return {
+          ...s,
+          slots_config: s.slots_config.map(slot => {
+            if (slot.id_slot === slotId) {
+              return {
+                ...slot,
+                [field]: value
+              };
+            }
+            return slot;
+          })
+        };
       }
-    }
+      return s;
+    });
+    formik.setFieldValue('servicios', current);
   };
 
   const updateServicePrecio = (tipoServicioId, precio) => {
-    const current = [...formik.values.servicios];
-    const index = current.findIndex(s => s.id_tipo_servicio === tipoServicioId);
-    if (index !== -1) {
-      current[index].precio_menu = precio;
-      formik.setFieldValue('servicios', current);
-    }
+    const current = formik.values.servicios.map(s => {
+      if (s.id_tipo_servicio === tipoServicioId) {
+        return {
+          ...s,
+          precio_menu: precio
+        };
+      }
+      return s;
+    });
+    formik.setFieldValue('servicios', current);
   };
+
+
 
   return createPortal(
     <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-300" onClick={onClose}>
@@ -209,6 +298,9 @@ export default function ComedoresModal({
                 const isActive = !!config;
                 const isExpanded = expandedService === tipo.id;
                 const selectedEst = estructuras.find(e => e.id.toString() === config?.id_estructura_menu?.toString());
+                const srvIdx = formik.values.servicios.findIndex(s => s.id_tipo_servicio === tipo.id);
+                const srvError = formik.errors.servicios?.[srvIdx];
+                const perfError = srvError?.perfil_nutricional;
 
                 return (
                   <div key={tipo.id} className={`p-6 rounded-[2rem] border transition-all flex flex-col gap-4 ${isActive ? 'bg-white border-brand-900 shadow-md ring-4 ring-brand-900/5' : 'bg-slate-50 border-slate-100 opacity-60'}`}>
@@ -279,50 +371,160 @@ export default function ComedoresModal({
                         {/* Panel de Gramajes (si está expandido) */}
                         {isExpanded && (
                           <div className="md:col-span-8 animate-in slide-in-from-right-4 duration-500">
-                            <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 space-y-4">
-                              <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-                                <h5 className="text-[10px] font-black text-brand-900 uppercase tracking-widest">Gramajes Negociados por Renglón</h5>
-                                <span className="text-[8px] font-bold text-slate-400 uppercase italic">Solo para {tipo.nombre}</span>
-                              </div>
-                              
-                              <div className="grid grid-cols-1 gap-3">
-                                {selectedEst?.slots?.map(slot => {
-                                  const slotCfg = config.slots_config?.find(sc => sc.id_slot === slot.id);
-                                  // Si por alguna razón no hay config para este slot (ej: se agregó después), usamos el default
-                                  const currentUnidadId = slotCfg?.id_unidad_medida || slot.id_unidad_medida || '';
-                                  
-                                  return (
-                                    <div key={slot.id} className="flex items-center justify-between bg-white p-3 rounded-2xl border border-slate-100 shadow-sm group hover:border-brand-200 transition-all">
-                                      <div className="flex items-center gap-3">
-                                        <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-brand-50 group-hover:text-brand-900 transition-all">
-                                          <Layers size={14} />
-                                        </div>
-                                        <span className="text-[10px] font-black text-slate-700 uppercase tracking-tight">{slot.nombre}</span>
-                                      </div>
-                                      
-                                      <div className="flex items-center gap-2">
-                                        <div className="relative">
-                                          <input
-                                            type="number"
-                                            placeholder="0"
-                                            value={slotCfg?.cantidad_objetivo || 0}
-                                            onChange={(e) => updateSlotGramaje(tipo.id, slot.id, 'cantidad_objetivo', e.target.value)}
-                                            className="w-20 px-3 py-1.5 bg-slate-50 rounded-lg border border-slate-100 text-[11px] font-black text-brand-900 outline-none focus:border-brand-900 text-center pr-6"
-                                          />
-                                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-black text-slate-400">%</span>
-                                        </div>
-                                        <div className="px-3 py-1.5 bg-brand-50 text-brand-900 rounded-lg text-[8px] font-black uppercase tracking-widest border border-brand-100">
-                                          Ajuste
-                                        </div>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                                {(!selectedEst?.slots || selectedEst.slots.length === 0) && (
-                                  <div className="py-4 text-center">
-                                    <p className="text-[9px] font-bold text-slate-400 uppercase italic">Esta clasificación no tiene renglones definidos.</p>
+                            <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 space-y-6">
+                              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                                {/* Columna Izquierda: Gramajes */}
+                                <div className="space-y-4">
+                                  <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+                                    <h5 className="text-[10px] font-black text-brand-900 uppercase tracking-widest">Gramajes Negociados</h5>
+                                    <span className="text-[8px] font-bold text-slate-400 uppercase italic">Solo para {tipo.nombre}</span>
                                   </div>
-                                )}
+                                  
+                                  <div className="grid grid-cols-1 gap-3">
+                                    {selectedEst?.slots?.map(slot => {
+                                      const slotCfg = config.slots_config?.find(sc => sc.id_slot === slot.id);
+                                      return (
+                                        <div key={slot.id} className="flex items-center justify-between bg-white p-3 rounded-2xl border border-slate-100 shadow-sm group hover:border-brand-200 transition-all">
+                                          <div className="flex items-center gap-3">
+                                            <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-brand-50 group-hover:text-brand-900 transition-all">
+                                              <Layers size={14} />
+                                            </div>
+                                            <span className="text-[10px] font-black text-slate-700 uppercase tracking-tight">{slot.nombre}</span>
+                                          </div>
+                                          
+                                          <div className="flex items-center gap-2">
+                                            <div className="relative">
+                                              <input
+                                                type="number"
+                                                placeholder="0"
+                                                value={slotCfg?.cantidad_objetivo || 0}
+                                                onChange={(e) => updateSlotGramaje(tipo.id, slot.id, 'cantidad_objetivo', e.target.value)}
+                                                className="w-20 px-3 py-1.5 bg-slate-50 rounded-lg border border-slate-100 text-[11px] font-black text-brand-900 outline-none focus:border-brand-900 text-center pr-6"
+                                              />
+                                              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-black text-slate-400">%</span>
+                                            </div>
+                                            <div className="px-3 py-1.5 bg-brand-50 text-brand-900 rounded-lg text-[8px] font-black uppercase tracking-widest border border-brand-100">
+                                              Ajuste
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                    {(!selectedEst?.slots || selectedEst.slots.length === 0) && (
+                                      <div className="py-4 text-center">
+                                        <p className="text-[9px] font-bold text-slate-400 uppercase italic">Sin renglones definidos.</p>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Columna Derecha: Perfil Nutricional */}
+                                <div className="space-y-4">
+                                  <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+                                    <h5 className="text-[10px] font-black text-brand-900 uppercase tracking-widest">Perfil Nutricional</h5>
+                                    <span className="text-[8px] font-bold text-slate-400 uppercase italic">Límites y metas</span>
+                                  </div>
+
+                                  <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+                                    <div>
+                                      <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Meta Calórica Diaria</label>
+                                      <div className="relative">
+                                        <input
+                                          type="number"
+                                          value={config.perfil_nutricional?.kcal_objetivo ?? 800}
+                                          onChange={(e) => updatePerfilField(tipo.id, 'kcal_objetivo', e.target.value)}
+                                          className={`w-full pl-3 pr-10 py-2 bg-slate-50 rounded-lg border text-[11px] font-black text-brand-900 outline-none text-center transition-all ${
+                                            perfError?.kcal_objetivo ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-100 focus:border-brand-900'
+                                          }`}
+                                        />
+                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[8px] font-black text-slate-400">KCAL</span>
+                                      </div>
+                                      {perfError?.kcal_objetivo && (
+                                        <p className="text-[8px] text-red-500 font-bold uppercase italic mt-0.5">{perfError.kcal_objetivo}</p>
+                                      )}
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-3">
+                                      <div>
+                                        <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Carb Min %</label>
+                                        <input
+                                          type="number"
+                                          value={config.perfil_nutricional?.carb_min_pct ?? 50}
+                                          onChange={(e) => updatePerfilField(tipo.id, 'carb_min_pct', e.target.value)}
+                                          className={`w-full px-3 py-1.5 bg-slate-50 rounded-lg border text-[11px] font-black text-brand-900 outline-none text-center transition-all ${
+                                            perfError?.carb_min_pct ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-100 focus:border-brand-900'
+                                          }`}
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Carb Max %</label>
+                                        <input
+                                          type="number"
+                                          value={config.perfil_nutricional?.carb_max_pct ?? 60}
+                                          onChange={(e) => updatePerfilField(tipo.id, 'carb_max_pct', e.target.value)}
+                                          className={`w-full px-3 py-1.5 bg-slate-50 rounded-lg border text-[11px] font-black text-brand-900 outline-none text-center transition-all ${
+                                            perfError?.carb_max_pct ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-100 focus:border-brand-900'
+                                          }`}
+                                        />
+                                      </div>
+                                      {(perfError?.carb_min_pct || perfError?.carb_max_pct) && (
+                                        <p className="col-span-2 text-[8px] text-red-500 font-bold uppercase italic">{perfError.carb_max_pct || perfError.carb_min_pct}</p>
+                                      )}
+                                      
+                                      <div>
+                                        <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Prot Min %</label>
+                                        <input
+                                          type="number"
+                                          value={config.perfil_nutricional?.prot_min_pct ?? 15}
+                                          onChange={(e) => updatePerfilField(tipo.id, 'prot_min_pct', e.target.value)}
+                                          className={`w-full px-3 py-1.5 bg-slate-50 rounded-lg border text-[11px] font-black text-brand-900 outline-none text-center transition-all ${
+                                            perfError?.prot_min_pct ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-100 focus:border-brand-900'
+                                          }`}
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Prot Max %</label>
+                                        <input
+                                          type="number"
+                                          value={config.perfil_nutricional?.prot_max_pct ?? 20}
+                                          onChange={(e) => updatePerfilField(tipo.id, 'prot_max_pct', e.target.value)}
+                                          className={`w-full px-3 py-1.5 bg-slate-50 rounded-lg border text-[11px] font-black text-brand-900 outline-none text-center transition-all ${
+                                            perfError?.prot_max_pct ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-100 focus:border-brand-900'
+                                          }`}
+                                        />
+                                      </div>
+                                      {(perfError?.prot_min_pct || perfError?.prot_max_pct) && (
+                                        <p className="col-span-2 text-[8px] text-red-500 font-bold uppercase italic">{perfError.prot_max_pct || perfError.prot_min_pct}</p>
+                                      )}
+
+                                      <div>
+                                        <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Grasa Min %</label>
+                                        <input
+                                          type="number"
+                                          value={config.perfil_nutricional?.grasa_min_pct ?? 25}
+                                          onChange={(e) => updatePerfilField(tipo.id, 'grasa_min_pct', e.target.value)}
+                                          className={`w-full px-3 py-1.5 bg-slate-50 rounded-lg border text-[11px] font-black text-brand-900 outline-none text-center transition-all ${
+                                            perfError?.grasa_min_pct ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-100 focus:border-brand-900'
+                                          }`}
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Grasa Max %</label>
+                                        <input
+                                          type="number"
+                                          value={config.perfil_nutricional?.grasa_max_pct ?? 30}
+                                          onChange={(e) => updatePerfilField(tipo.id, 'grasa_max_pct', e.target.value)}
+                                          className={`w-full px-3 py-1.5 bg-slate-50 rounded-lg border text-[11px] font-black text-brand-900 outline-none text-center transition-all ${
+                                            perfError?.grasa_max_pct ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-100 focus:border-brand-900'
+                                          }`}
+                                        />
+                                      </div>
+                                      {(perfError?.grasa_min_pct || perfError?.grasa_max_pct) && (
+                                        <p className="col-span-2 text-[8px] text-red-500 font-bold uppercase italic">{perfError.grasa_max_pct || perfError.grasa_min_pct}</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
                               </div>
                             </div>
                           </div>

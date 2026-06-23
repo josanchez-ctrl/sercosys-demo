@@ -12,6 +12,7 @@ export async function getRecetas(id_empresa) {
       *,
       tipologia: receta_tipologias(nombre, abreviatura),
       unidad_porcion: almacen_unidades_medida(id, abreviatura, nombre),
+      receta_tags: receta_tags_relacion(tag_code),
       ingredientes: maestro_receta_ingredientes!maestro_receta_ingredientes_id_receta_padre_fkey (
         *,
         rubro: almacen_rubros(nombre, es_alergeno, id_unidad_medida, unidad: almacen_unidades_medida(abreviatura), categoria: almacen_categorias(nombre)),
@@ -30,7 +31,7 @@ export async function getRecetas(id_empresa) {
  */
 export async function saveRecetaCompleta(recetaPayload, ingredientes, userId) {
   const now = await Now();
-  const { id, ingredientes: _, tipologia: __, ...rest } = recetaPayload;
+  const { id, ingredientes: _, tipologia: __, tags, ...rest } = recetaPayload;
   const isNew = !id;
 
   let savedReceta;
@@ -44,6 +45,10 @@ export async function saveRecetaCompleta(recetaPayload, ingredientes, userId) {
     nombre: rest.nombre.toUpperCase(),
     rendimiento: rest.rendimiento || 1,
     peso_porcion_base: rest.peso_porcion_base || 0,
+    calorias: rest.calorias || 0,
+    proteinas_g: rest.proteinas_g || 0,
+    carbohidratos_g: rest.carbohidratos_g || 0,
+    grasas_g: rest.grasas_g || 0,
     estatus: rest.estatus ?? true,
   };
 
@@ -80,6 +85,23 @@ export async function saveRecetaCompleta(recetaPayload, ingredientes, userId) {
 
     const { error: ingError } = await supabase.from('maestro_receta_ingredientes').insert(ingredientesToSave);
     if (ingError) throw ingError;
+  }
+
+  // 3. Guardar Etiquetas (Sync)
+  if (!isNew) {
+    await supabase.from('receta_tags_relacion').delete().eq('id_receta', savedReceta.id);
+  }
+
+  if (tags && tags.length > 0) {
+    const tagsToSave = tags.map(tagCode => ({
+      id_receta: savedReceta.id,
+      tag_code: tagCode,
+      timestamp_create: now,
+      id_usuario_create: userId
+    }));
+
+    const { error: tagError } = await supabase.from('receta_tags_relacion').insert(tagsToSave);
+    if (tagError) throw tagError;
   }
 
   return savedReceta;

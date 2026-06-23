@@ -111,7 +111,7 @@ export const getEstructuraSlots = async (id_estructura_base) => {
 export const getRecetasDisponibles = async (id_empresa) => {
   const { data, error } = await supabase
     .from('maestro_recetas')
-    .select('id, nombre, codigo_ficha, rendimiento, id_tipologia, tipologia:receta_tipologias(nombre, abreviatura)')
+    .select('id, nombre, codigo_ficha, rendimiento, id_tipologia, calorias, proteinas_g, carbohidratos_g, grasas_g, tipologia:receta_tipologias(nombre, abreviatura), receta_tags:receta_tags_relacion(tag_code)')
     .eq('id_empresa', id_empresa)
     .eq('estatus', true)
     .order('nombre', { ascending: true });

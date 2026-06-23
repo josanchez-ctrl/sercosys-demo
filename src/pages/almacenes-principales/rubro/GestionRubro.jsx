@@ -391,7 +391,7 @@ export default function GestionRubro() {
                             ))}
                         </div>
                     ) : filteredRubros.length > 0 ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 animate-in fade-in duration-300">
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 animate-in fade-in duration-300">
                             {filteredRubros.map(r => {
                                 const cat = categorias.find(c => c.id === r.id_categoria);
                                 return (
@@ -418,24 +418,36 @@ export default function GestionRubro() {
 
                                             {/* Título */}
                                             <h4 className="text-slate-800 text-xs font-black uppercase tracking-tight mt-2.5 leading-snug line-clamp-2">
-                                                {r.nombre}
+                                                <div className="flex items-center gap-2">
+                                                    <span>{r.nombre}</span>
+                                                    {r.almacen_unidades_medida?.abreviatura && (
+                                                        <span className="text-[9px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md uppercase tracking-tight" title={`Unidad: ${r.almacen_unidades_medida.nombre}`}>
+                                                            {r.almacen_unidades_medida.abreviatura}
+                                                        </span>
+                                                    )}
+                                                    {r.es_alergeno && (
+                                                        <span className="flex items-center gap-1 text-[9px] font-black bg-orange-50 text-orange-600 border border-orange-100 px-2 py-0.5 rounded-md uppercase tracking-tight animate-pulse">
+                                                            <ShieldAlert size={10} /> Alérgeno
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </h4>
 
                                             {/* Badges de Atributos */}
                                             <div className="flex flex-wrap gap-1.5 mt-3.5">
-                                                {r.almacen_unidades_medida?.abreviatura && (
+                                                {/* {r.almacen_unidades_medida?.abreviatura && (
                                                     <span className="text-[9px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md uppercase tracking-tight" title={`Unidad: ${r.almacen_unidades_medida.nombre}`}>
                                                         {r.almacen_unidades_medida.abreviatura}
                                                     </span>
-                                                )}
-                                                {r.es_alergeno && (
+                                                )} */}
+                                                {/* {r.es_alergeno && (
                                                     <span className="flex items-center gap-1 text-[9px] font-black bg-orange-50 text-orange-600 border border-orange-100 px-2 py-0.5 rounded-md uppercase tracking-tight animate-pulse">
                                                         <ShieldAlert size={10} /> Alérgeno
                                                     </span>
-                                                )}
+                                                )} */}
                                                 {r.es_ingrediente && (
-                                                    <span className="flex items-center gap-1 text-[9px] font-black bg-emerald-50 text-emerald-600 border border-emerald-100 px-2 py-0.5 rounded-md uppercase tracking-tight">
-                                                        <Utensils size={9} /> Cocina
+                                                    <span className="flex items-center gap-1 text-[9px] font-black bg-emerald-50 text-emerald-600 border border-emerald-100 px-2 py-0.5 rounded-md uppercase tracking-tight" title="Ingrediente">
+                                                        <Utensils size={9} />
                                                     </span>
                                                 )}
                                                 {r.solicitud_manual && (
@@ -472,8 +484,8 @@ export default function GestionRubro() {
                                         </div>
 
                                         {/* Acciones */}
-                                        <div className="mt-5 pt-3 border-t border-slate-100 flex justify-between items-center">
-                                            <span className="text-[9px] font-bold text-slate-300 italic">ID: #{r.id}</span>
+                                        <div className="pt-1 border-t border-slate-100 flex justify-between items-center">
+                                            <span className="text-[9px] font-bold text-slate-300 italic">{/* ID: #{r.id} */}</span>
                                             <button
                                                 onClick={() => { setSelectedItem(r); setPreselectedCategory(null); setShowModal(true); }}
                                                 className="flex items-center gap-1.5 px-4 py-2 bg-slate-50 hover:bg-brand-50 text-slate-500 hover:text-brand-900 rounded-xl text-[10px] font-black uppercase tracking-widest border border-slate-100 hover:border-brand-200 transition-all active:scale-95 shadow-sm"

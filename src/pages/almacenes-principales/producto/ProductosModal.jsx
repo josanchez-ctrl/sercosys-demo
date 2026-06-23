@@ -27,6 +27,7 @@ const validationSchema = Yup.object().shape({
 
 export default function ProductosModal({ initialData = null, empresaActiva, perfil, almacenSel, onClose, onUpdate }) {
     const isEdit = !!initialData?.id;
+    const isDistribucion = almacenSel?.nombre?.toUpperCase().includes('DISTRIBUCION') || almacenSel?.nombre?.toUpperCase().includes('DISTRIBUCIÓN');
     const [loadingMaestros, setLoadingMaestros] = useState(true);
 
     const [rubros, setRubros] = useState([]);
@@ -523,8 +524,14 @@ export default function ProductosModal({ initialData = null, empresaActiva, perf
                                         {/* Check 1: Despresable (Insumo de Desposte) */}
                                         <label className="flex items-center justify-between p-3.5 rounded-xl bg-orange-50/30 border border-orange-100 cursor-pointer hover:bg-orange-50 transition-all group/toggle">
                                             <div className="flex flex-col">
-                                                <span className="text-[10px] font-black text-orange-900 uppercase tracking-widest leading-none">Insumo de Desposte (Despresable)</span>
-                                                <span className="text-[9px] font-bold text-orange-600/60 italic mt-1">¿Este producto se divide en cortes con costos diferentes?</span>
+                                                <span className="text-[10px] font-black text-orange-900 uppercase tracking-widest leading-none">
+                                                    {isDistribucion ? 'Insumo Reenvasable' : 'Insumo de Desposte (Despresable)'}
+                                                </span>
+                                                <span className="text-[9px] font-bold text-orange-600/60 italic mt-1">
+                                                    {isDistribucion 
+                                                        ? '¿Este producto se divide en empaques o presentaciones diferentes?' 
+                                                        : '¿Este producto se divide en cortes con costos diferentes?'}
+                                                </span>
                                             </div>
                                             <input
                                                 type="checkbox"
@@ -540,8 +547,14 @@ export default function ProductosModal({ initialData = null, empresaActiva, perf
                                                 {/* Nuevo Check de Prorrateo de Costo */}
                                                 <label className="flex items-center justify-between p-3 rounded-xl bg-white border border-orange-100 cursor-pointer hover:bg-orange-50/40 transition-all group/toggle">
                                                     <div className="flex flex-col">
-                                                        <span className="text-[10px] font-black text-orange-950 uppercase tracking-widest leading-none">Prorratear Costo por Peso (Cortes)</span>
-                                                        <span className="text-[8px] font-bold text-orange-600/60 italic mt-1">¿Hereda el costo unitario del insumo? (Desperdicios a costo $0.00)</span>
+                                                        <span className="text-[10px] font-black text-orange-955 uppercase tracking-widest leading-none">
+                                                            {isDistribucion ? 'Prorratear Costo por Peso (Reempaques)' : 'Prorratear Costo por Peso (Cortes)'}
+                                                        </span>
+                                                        <span className="text-[8px] font-bold text-orange-600/60 italic mt-1">
+                                                            {isDistribucion 
+                                                                ? '¿Hereda el costo unitario del insumo? (Pérdidas a costo $0.00)' 
+                                                                : '¿Hereda el costo unitario del insumo? (Desperdicios a costo $0.00)'}
+                                                        </span>
                                                     </div>
                                                     <input
                                                         type="checkbox"
@@ -552,15 +565,21 @@ export default function ProductosModal({ initialData = null, empresaActiva, perf
                                                 </label>
 
                                                 <div className="flex flex-col">
-                                                    <span className="text-[9px] font-black text-orange-950 uppercase tracking-widest leading-none">Cortes y Derivados Permitidos</span>
-                                                    <span className="text-[8px] font-bold text-orange-600/60 italic mt-1">Busque y agregue los productos resultantes de la transformación de este insumo.</span>
+                                                    <span className="text-[9px] font-black text-orange-955 uppercase tracking-widest leading-none">
+                                                        {isDistribucion ? 'Presentaciones de Reenvasado' : 'Cortes y Derivados Permitidos'}
+                                                    </span>
+                                                    <span className="text-[8px] font-bold text-orange-600/60 italic mt-1">
+                                                        {isDistribucion 
+                                                            ? 'Busque y agregue las presentaciones resultantes del reenvasado de este insumo.' 
+                                                            : 'Busque y agregue los productos resultantes de la transformación de este insumo.'}
+                                                    </span>
                                                 </div>
 
                                                 {/* Buscador Predictivo */}
                                                 <div className="relative">
                                                     <input
                                                         type="text"
-                                                        placeholder="Buscar producto por rubro, marca o variedad..."
+                                                        placeholder={isDistribucion ? 'Buscar producto para reenvasar...' : 'Buscar producto por rubro, marca o variedad...'}
                                                         value={searchCorte}
                                                         onChange={e => setSearchCorte(e.target.value)}
                                                         onFocus={() => setShowDropdownCortes(true)}
@@ -577,7 +596,7 @@ export default function ProductosModal({ initialData = null, empresaActiva, perf
                                                                         <div
                                                                             key={prod.id}
                                                                             onClick={() => {
-                                                                                setDerivadosSeleccionados(prev => [...prev, { id_producto_destino: prod.id, porcentaje_costo: 0.00, porcentaje_corte: 0.00 }]);
+                                                                                setDerivadosSeleccionados(prev => [...prev, { id_producto_destino: prod.id, porcentaje_costo: isDistribucion ? 100.00 : 0.00, porcentaje_corte: isDistribucion ? 100.00 : 0.00 }]);
                                                                                 setSearchCorte('');
                                                                                 setShowDropdownCortes(false);
                                                                             }}
@@ -609,36 +628,40 @@ export default function ProductosModal({ initialData = null, empresaActiva, perf
                                                                     return (
                                                                         <div key={id} className="flex items-center justify-between p-2 rounded-lg bg-orange-50/30 border border-orange-100/20 text-[9px] font-extrabold text-slate-700 uppercase animate-in slide-in-from-top-1 duration-200 gap-2">
                                                                             <span className="truncate flex-1">{prodLabel}</span>
-                                                                            <div className="flex items-center gap-1.5 shrink-0">
-                                                                                <span className="text-[8px] text-slate-400 font-black">% CORTE:</span>
-                                                                                <input 
-                                                                                    type="number" 
-                                                                                    step="0.01" 
-                                                                                    min="0"
-                                                                                    max="100"
-                                                                                    value={deriv.porcentaje_corte || 0.00} 
-                                                                                    onChange={(e) => {
-                                                                                        const val = parseFloat(e.target.value) || 0;
-                                                                                        setDerivadosSeleccionados(prev => prev.map(x => x.id_producto_destino === id ? { ...x, porcentaje_corte: val } : x));
-                                                                                    }}
-                                                                                    className="w-14 px-1 py-0.5 bg-white border border-gray-200 rounded text-center font-black text-slate-800 text-[10px] outline-none focus:border-orange-450 focus:ring-1 focus:ring-orange-400/20"
-                                                                                />
-                                                                            </div>
-                                                                            <div className="flex items-center gap-1.5 shrink-0">
-                                                                                <span className="text-[8px] text-slate-400 font-black">% COSTO:</span>
-                                                                                <input 
-                                                                                    type="number" 
-                                                                                    step="0.01" 
-                                                                                    min="0"
-                                                                                    max="100"
-                                                                                    value={deriv.porcentaje_costo} 
-                                                                                    onChange={(e) => {
-                                                                                        const val = parseFloat(e.target.value) || 0;
-                                                                                        setDerivadosSeleccionados(prev => prev.map(x => x.id_producto_destino === id ? { ...x, porcentaje_costo: val } : x));
-                                                                                    }}
-                                                                                    className="w-14 px-1 py-0.5 bg-white border border-gray-200 rounded text-center font-black text-slate-800 text-[10px] outline-none focus:border-orange-450 focus:ring-1 focus:ring-orange-400/20"
-                                                                                />
-                                                                            </div>
+                                                                            {!isDistribucion && (
+                                                                                <>
+                                                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                                                        <span className="text-[8px] text-slate-400 font-black">% CORTE:</span>
+                                                                                        <input 
+                                                                                            type="number" 
+                                                                                            step="0.01" 
+                                                                                            min="0"
+                                                                                            max="100"
+                                                                                            value={deriv.porcentaje_corte || 0.00} 
+                                                                                            onChange={(e) => {
+                                                                                                const val = parseFloat(e.target.value) || 0;
+                                                                                                setDerivadosSeleccionados(prev => prev.map(x => x.id_producto_destino === id ? { ...x, porcentaje_corte: val } : x));
+                                                                                            }}
+                                                                                            className="w-14 px-1 py-0.5 bg-white border border-gray-200 rounded text-center font-black text-slate-800 text-[10px] outline-none focus:border-orange-450 focus:ring-1 focus:ring-orange-400/20"
+                                                                                        />
+                                                                                    </div>
+                                                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                                                        <span className="text-[8px] text-slate-400 font-black">% COSTO:</span>
+                                                                                        <input 
+                                                                                            type="number" 
+                                                                                            step="0.01" 
+                                                                                            min="0"
+                                                                                            max="100"
+                                                                                            value={deriv.porcentaje_costo} 
+                                                                                            onChange={(e) => {
+                                                                                                const val = parseFloat(e.target.value) || 0;
+                                                                                                setDerivadosSeleccionados(prev => prev.map(x => x.id_producto_destino === id ? { ...x, porcentaje_costo: val } : x));
+                                                                                            }}
+                                                                                            className="w-14 px-1 py-0.5 bg-white border border-gray-200 rounded text-center font-black text-slate-800 text-[10px] outline-none focus:border-orange-450 focus:ring-1 focus:ring-orange-400/20"
+                                                                                        />
+                                                                                    </div>
+                                                                                </>
+                                                                            )}
                                                                             <button
                                                                                 type="button"
                                                                                 onClick={() => setDerivadosSeleccionados(prev => prev.filter(x => x.id_producto_destino !== id))}
@@ -650,20 +673,22 @@ export default function ProductosModal({ initialData = null, empresaActiva, perf
                                                                     );
                                                                 })}
                                                             </div>
-                                                            <div className="flex flex-col gap-1 px-2 pt-1.5 border-t border-gray-100 text-[9px] font-black uppercase">
-                                                                <div className="flex items-center justify-between">
-                                                                    <span className="text-slate-400">Total Costo Distribuido:</span>
-                                                                    <span className={Math.abs(totalPorcentajeDerivados - 100) < 0.001 ? 'text-emerald-600' : 'text-amber-600'}>
-                                                                        {totalPorcentajeDerivados.toFixed(2)}% {Math.abs(totalPorcentajeDerivados - 100) > 0.001 && '(Recomendado: 100%)'}
-                                                                    </span>
+                                                            {!isDistribucion && (
+                                                                <div className="flex flex-col gap-1 px-2 pt-1.5 border-t border-gray-100 text-[9px] font-black uppercase">
+                                                                    <div className="flex items-center justify-between">
+                                                                        <span className="text-slate-400">Total Costo Distribuido:</span>
+                                                                        <span className={Math.abs(totalPorcentajeDerivados - 100) < 0.001 ? 'text-emerald-600' : 'text-amber-600'}>
+                                                                            {totalPorcentajeDerivados.toFixed(2)}% {Math.abs(totalPorcentajeDerivados - 100) > 0.001 && '(Recomendado: 100%)'}
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="flex items-center justify-between">
+                                                                        <span className="text-slate-400">Total Corte Distribuido:</span>
+                                                                        <span className={Math.abs(totalCorteDerivados - 100) < 0.001 ? 'text-emerald-600' : 'text-amber-600'}>
+                                                                            {totalCorteDerivados.toFixed(2)}% {Math.abs(totalCorteDerivados - 100) > 0.001 && '(Recomendado: 100%)'}
+                                                                        </span>
+                                                                    </div>
                                                                 </div>
-                                                                <div className="flex items-center justify-between">
-                                                                    <span className="text-slate-400">Total Corte Distribuido:</span>
-                                                                    <span className={Math.abs(totalCorteDerivados - 100) < 0.001 ? 'text-emerald-600' : 'text-amber-600'}>
-                                                                        {totalCorteDerivados.toFixed(2)}% {Math.abs(totalCorteDerivados - 100) > 0.001 && '(Recomendado: 100%)'}
-                                                                    </span>
-                                                                </div>
-                                                            </div>
+                                                            )}
                                                         </div>
                                                     ) : (
                                                         <div className="text-[8px] font-bold text-slate-450 italic bg-white p-3.5 rounded-xl border border-gray-100 text-center">
@@ -677,8 +702,12 @@ export default function ProductosModal({ initialData = null, empresaActiva, perf
                                         {/* Check 2: Resultado de Transformación */}
                                         <label className="flex items-center justify-between p-3.5 rounded-xl bg-purple-50/30 border border-purple-100 cursor-pointer hover:bg-purple-50 transition-all group/toggle">
                                             <div className="flex flex-col">
-                                                <span className="text-[10px] font-black text-purple-900 uppercase tracking-widest leading-none">Resultado de Transformación</span>
-                                                <span className="text-[9px] font-bold text-purple-600/60 italic mt-1">¿Es un producto obtenido del proceso?</span>
+                                                <span className="text-[10px] font-black text-purple-900 uppercase tracking-widest leading-none">
+                                                    {isDistribucion ? 'Resultado de Reenvasado' : 'Resultado de Transformación'}
+                                                </span>
+                                                <span className="text-[9px] font-bold text-purple-600/60 italic mt-1">
+                                                    {isDistribucion ? '¿Es un producto obtenido del reenvasado de otro?' : '¿Es un producto obtenido del proceso?'}
+                                                </span>
                                             </div>
                                             <input
                                                 type="checkbox"
@@ -691,8 +720,14 @@ export default function ProductosModal({ initialData = null, empresaActiva, perf
                                         {formik.values.es_resultado_transformacion && (
                                             <div className="px-4 py-3 rounded-2xl bg-purple-50/15 border border-purple-100/50 space-y-4 animate-in fade-in duration-300">
                                                 <div className="flex flex-col">
-                                                    <span className="text-[9px] font-black text-purple-955 uppercase tracking-widest leading-none">Orígenes de Transformación</span>
-                                                    <span className="text-[8px] font-bold text-purple-600/60 italic mt-1">Busque y agregue los insumos origen de los cuales proviene este producto.</span>
+                                                    <span className="text-[9px] font-black text-purple-955 uppercase tracking-widest leading-none">
+                                                        {isDistribucion ? 'Orígenes de Reenvasado' : 'Orígenes de Transformación'}
+                                                    </span>
+                                                    <span className="text-[8px] font-bold text-purple-600/60 italic mt-1">
+                                                        {isDistribucion 
+                                                            ? 'Busque y agregue los insumos a granel de los cuales proviene este producto.' 
+                                                            : 'Busque y agregue los insumos origen de los cuales proviene este producto.'}
+                                                    </span>
                                                 </div>
 
                                                 {/* Buscador Predictivo */}
@@ -716,7 +751,7 @@ export default function ProductosModal({ initialData = null, empresaActiva, perf
                                                                         <div
                                                                             key={prod.id}
                                                                             onClick={() => {
-                                                                                setOrigenesSeleccionados(prev => [...prev, { id_producto_origen: prod.id, porcentaje_costo: 0.00, porcentaje_corte: 0.00 }]);
+                                                                                setOrigenesSeleccionados(prev => [...prev, { id_producto_origen: prod.id, porcentaje_costo: isDistribucion ? 100.00 : 0.00, porcentaje_corte: isDistribucion ? 100.00 : 0.00 }]);
                                                                                 setSearchOrigen('');
                                                                                 setShowDropdownOrigenes(false);
                                                                             }}
@@ -748,36 +783,40 @@ export default function ProductosModal({ initialData = null, empresaActiva, perf
                                                                     return (
                                                                         <div key={id} className="flex items-center justify-between p-2 rounded-lg bg-purple-50/30 border border-purple-100/20 text-[9px] font-extrabold text-slate-700 uppercase animate-in slide-in-from-top-1 duration-200 gap-2">
                                                                             <span className="truncate flex-1">{prodLabel}</span>
-                                                                            <div className="flex items-center gap-1.5 shrink-0">
-                                                                                <span className="text-[8px] text-slate-400 font-black">% CORTE:</span>
-                                                                                <input 
-                                                                                    type="number" 
-                                                                                    step="0.01" 
-                                                                                    min="0"
-                                                                                    max="100"
-                                                                                    value={orig.porcentaje_corte || 0.00} 
-                                                                                    onChange={(e) => {
-                                                                                        const val = parseFloat(e.target.value) || 0;
-                                                                                        setOrigenesSeleccionados(prev => prev.map(x => x.id_producto_origen === id ? { ...x, porcentaje_corte: val } : x));
-                                                                                    }}
-                                                                                    className="w-14 px-1 py-0.5 bg-white border border-gray-200 rounded text-center font-black text-slate-800 text-[10px] outline-none focus:border-purple-450 focus:ring-1 focus:ring-purple-400/20"
-                                                                                />
-                                                                            </div>
-                                                                            <div className="flex items-center gap-1.5 shrink-0">
-                                                                                <span className="text-[8px] text-slate-400 font-black">% COSTO:</span>
-                                                                                <input 
-                                                                                    type="number" 
-                                                                                    step="0.01" 
-                                                                                    min="0"
-                                                                                    max="100"
-                                                                                    value={orig.porcentaje_costo} 
-                                                                                    onChange={(e) => {
-                                                                                        const val = parseFloat(e.target.value) || 0;
-                                                                                        setOrigenesSeleccionados(prev => prev.map(x => x.id_producto_origen === id ? { ...x, porcentaje_costo: val } : x));
-                                                                                    }}
-                                                                                    className="w-14 px-1 py-0.5 bg-white border border-gray-200 rounded text-center font-black text-slate-800 text-[10px] outline-none focus:border-purple-450 focus:ring-1 focus:ring-purple-400/20"
-                                                                                />
-                                                                            </div>
+                                                                            {!isDistribucion && (
+                                                                                <>
+                                                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                                                        <span className="text-[8px] text-slate-400 font-black">% CORTE:</span>
+                                                                                        <input 
+                                                                                            type="number" 
+                                                                                            step="0.01" 
+                                                                                            min="0"
+                                                                                            max="100"
+                                                                                            value={orig.porcentaje_corte || 0.00} 
+                                                                                            onChange={(e) => {
+                                                                                                const val = parseFloat(e.target.value) || 0;
+                                                                                                setOrigenesSeleccionados(prev => prev.map(x => x.id_producto_origen === id ? { ...x, porcentaje_corte: val } : x));
+                                                                                            }}
+                                                                                            className="w-14 px-1 py-0.5 bg-white border border-gray-200 rounded text-center font-black text-slate-800 text-[10px] outline-none focus:border-purple-450 focus:ring-1 focus:ring-purple-400/20"
+                                                                                        />
+                                                                                    </div>
+                                                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                                                        <span className="text-[8px] text-slate-400 font-black">% COSTO:</span>
+                                                                                        <input 
+                                                                                            type="number" 
+                                                                                            step="0.01" 
+                                                                                            min="0"
+                                                                                            max="100"
+                                                                                            value={orig.porcentaje_costo} 
+                                                                                            onChange={(e) => {
+                                                                                                const val = parseFloat(e.target.value) || 0;
+                                                                                                setOrigenesSeleccionados(prev => prev.map(x => x.id_producto_origen === id ? { ...x, porcentaje_costo: val } : x));
+                                                                                            }}
+                                                                                            className="w-14 px-1 py-0.5 bg-white border border-gray-200 rounded text-center font-black text-slate-800 text-[10px] outline-none focus:border-purple-450 focus:ring-1 focus:ring-purple-400/20"
+                                                                                        />
+                                                                                    </div>
+                                                                                </>
+                                                                            )}
                                                                             <button
                                                                                 type="button"
                                                                                 onClick={() => setOrigenesSeleccionados(prev => prev.filter(x => x.id_producto_origen !== id))}
@@ -789,20 +828,22 @@ export default function ProductosModal({ initialData = null, empresaActiva, perf
                                                                     );
                                                                 })}
                                                             </div>
-                                                            <div className="flex flex-col gap-1 px-2 pt-1.5 border-t border-gray-100 text-[9px] font-black uppercase">
-                                                                <div className="flex items-center justify-between">
-                                                                    <span className="text-slate-400">Total Costo Distribuido:</span>
-                                                                    <span className={Math.abs(totalPorcentajeOrigenes - 100) < 0.001 ? 'text-emerald-600' : 'text-amber-600'}>
-                                                                        {totalPorcentajeOrigenes.toFixed(2)}% {Math.abs(totalPorcentajeOrigenes - 100) > 0.001 && '(Recomendado: 100%)'}
-                                                                    </span>
+                                                            {!isDistribucion && (
+                                                                <div className="flex flex-col gap-1 px-2 pt-1.5 border-t border-gray-100 text-[9px] font-black uppercase">
+                                                                    <div className="flex items-center justify-between">
+                                                                        <span className="text-slate-400">Total Costo Distribuido:</span>
+                                                                        <span className={Math.abs(totalPorcentajeOrigenes - 100) < 0.001 ? 'text-emerald-600' : 'text-amber-600'}>
+                                                                            {totalPorcentajeOrigenes.toFixed(2)}% {Math.abs(totalPorcentajeOrigenes - 100) > 0.001 && '(Recomendado: 100%)'}
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="flex items-center justify-between">
+                                                                        <span className="text-slate-400">Total Corte Distribuido:</span>
+                                                                        <span className={Math.abs(totalCorteOrigenes - 100) < 0.001 ? 'text-emerald-600' : 'text-amber-600'}>
+                                                                            {totalCorteOrigenes.toFixed(2)}% {Math.abs(totalCorteOrigenes - 100) > 0.001 && '(Recomendado: 100%)'}
+                                                                        </span>
+                                                                    </div>
                                                                 </div>
-                                                                <div className="flex items-center justify-between">
-                                                                    <span className="text-slate-400">Total Corte Distribuido:</span>
-                                                                    <span className={Math.abs(totalCorteOrigenes - 100) < 0.001 ? 'text-emerald-600' : 'text-amber-600'}>
-                                                                        {totalCorteOrigenes.toFixed(2)}% {Math.abs(totalCorteOrigenes - 100) > 0.001 && '(Recomendado: 100%)'}
-                                                                    </span>
-                                                                </div>
-                                                            </div>
+                                                            )}
                                                         </div>
                                                     ) : (
                                                         <div className="text-[8px] font-bold text-slate-450 italic bg-white p-3.5 rounded-xl border border-gray-100 text-center">
@@ -814,115 +855,119 @@ export default function ProductosModal({ initialData = null, empresaActiva, perf
                                         )}
 
                                         {/* Check 3: Reprocesable (Insumo de Reproceso) */}
-                                        <label className="flex items-center justify-between p-3.5 rounded-xl bg-indigo-50/30 border border-indigo-100 cursor-pointer hover:bg-indigo-50 transition-all group/toggle">
-                                            <div className="flex flex-col">
-                                                <span className="text-[10px] font-black text-indigo-900 uppercase tracking-widest leading-none">Insumo de Reproceso</span>
-                                                <span className="text-[9px] font-bold text-indigo-600/60 italic mt-1">¿Este producto puede ser reprocesado por molienda?</span>
-                                            </div>
-                                            <input
-                                                type="checkbox"
-                                                {...formik.getFieldProps('es_reprocesable')}
-                                                checked={formik.values.es_reprocesable}
-                                                className="w-5 h-5 rounded-lg text-indigo-600 focus:ring-indigo-500 cursor-pointer transition-transform group-active/toggle:scale-90"
-                                            />
-                                        </label>
-
-                                        {formik.values.es_reprocesable && (
-                                            <div className="px-4 py-3 rounded-2xl bg-indigo-50/15 border border-indigo-100/50 space-y-4 animate-in fade-in duration-300">
-                                                
-                                                <div className="flex flex-col">
-                                                    <span className="text-[9px] font-black text-indigo-955 uppercase tracking-widest leading-none">Subproductos de Reproceso</span>
-                                                    <span className="text-[8px] font-bold text-indigo-600/60 italic mt-1">Busque y agregue los subproductos resultantes de la molienda de este producto.</span>
-                                                </div>
-
-                                                {/* Buscador Predictivo */}
-                                                <div className="relative">
+                                        {!isDistribucion && (
+                                            <>
+                                                <label className="flex items-center justify-between p-3.5 rounded-xl bg-indigo-50/30 border border-indigo-100 cursor-pointer hover:bg-indigo-50 transition-all group/toggle">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[10px] font-black text-indigo-900 uppercase tracking-widest leading-none">Insumo de Reproceso</span>
+                                                        <span className="text-[9px] font-bold text-indigo-600/60 italic mt-1">¿Este producto puede ser reprocesado por molienda?</span>
+                                                    </div>
                                                     <input
-                                                        type="text"
-                                                        placeholder="Buscar subproducto de salida..."
-                                                        value={searchReproceso}
-                                                        onChange={e => setSearchReproceso(e.target.value)}
-                                                        onFocus={() => setShowDropdownReprocesos(true)}
-                                                        onBlur={() => setTimeout(() => setShowDropdownReprocesos(false), 200)}
-                                                        className="w-full px-3 py-2.5 rounded-xl border border-gray-150 bg-white text-[10px] font-bold text-slate-750 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/10 transition-all placeholder:text-slate-350 placeholder:italic"
+                                                        type="checkbox"
+                                                        {...formik.getFieldProps('es_reprocesable')}
+                                                        checked={formik.values.es_reprocesable}
+                                                        className="w-5 h-5 rounded-lg text-indigo-650 focus:ring-indigo-500 cursor-pointer transition-transform group-active/toggle:scale-90"
                                                     />
-                                                    
-                                                    {showDropdownReprocesos && (
-                                                        <div className="absolute z-[20] top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-40 overflow-y-auto custom-scrollbar">
-                                                            {reprocesosSugeridos.length > 0 ? (
-                                                                reprocesosSugeridos.map(prod => {
-                                                                    const prodLabel = [prod.rubro?.nombre, prod.marca?.nombre, prod.variedad].filter(Boolean).join(' · ');
-                                                                    return (
-                                                                        <div
-                                                                            key={prod.id}
-                                                                            onClick={() => {
-                                                                                setReprocesosSeleccionados(prev => [...prev, { id_producto_destino: prod.id, porcentaje_costo: 100.00, porcentaje_corte: 100.00 }]);
-                                                                                setSearchReproceso('');
-                                                                                setShowDropdownReprocesos(false);
-                                                                            }}
-                                                                            className="px-3.5 py-2.5 hover:bg-indigo-50 hover:text-indigo-950 text-[9px] font-black text-slate-655 cursor-pointer flex justify-between items-center transition-colors uppercase border-b border-gray-50 last:border-b-0"
-                                                                        >
-                                                                            <span>{prodLabel}</span>
-                                                                            <span className="text-[8px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full font-extrabold uppercase">Seleccionar</span>
-                                                                        </div>
-                                                                    );
-                                                                })
-                                                            ) : (
-                                                                <div className="px-3.5 py-2.5 text-[9px] font-bold text-slate-450 italic text-center">Sin sugerencias coincidentes o vacías</div>
+                                                </label>
+
+                                                {formik.values.es_reprocesable && (
+                                                    <div className="px-4 py-3 rounded-2xl bg-indigo-50/15 border border-indigo-100/50 space-y-4 animate-in fade-in duration-300">
+                                                        
+                                                        <div className="flex flex-col">
+                                                            <span className="text-[9px] font-black text-indigo-955 uppercase tracking-widest leading-none">Subproductos de Reproceso</span>
+                                                            <span className="text-[8px] font-bold text-indigo-600/60 italic mt-1">Busque y agregue los subproductos resultantes de la molienda de este producto.</span>
+                                                        </div>
+
+                                                        {/* Buscador Predictivo */}
+                                                        <div className="relative">
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Buscar subproducto de salida..."
+                                                                value={searchReproceso}
+                                                                onChange={e => setSearchReproceso(e.target.value)}
+                                                                onFocus={() => setShowDropdownReprocesos(true)}
+                                                                onBlur={() => setTimeout(() => setShowDropdownReprocesos(false), 200)}
+                                                                className="w-full px-3 py-2.5 rounded-xl border border-gray-150 bg-white text-[10px] font-bold text-slate-750 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/10 transition-all placeholder:text-slate-350 placeholder:italic"
+                                                            />
+                                                            
+                                                            {showDropdownReprocesos && (
+                                                                <div className="absolute z-[20] top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-40 overflow-y-auto custom-scrollbar">
+                                                                    {reprocesosSugeridos.length > 0 ? (
+                                                                        reprocesosSugeridos.map(prod => {
+                                                                            const prodLabel = [prod.rubro?.nombre, prod.marca?.nombre, prod.variedad].filter(Boolean).join(' · ');
+                                                                            return (
+                                                                                <div
+                                                                                    key={prod.id}
+                                                                                    onClick={() => {
+                                                                                        setReprocesosSeleccionados(prev => [...prev, { id_producto_destino: prod.id, porcentaje_costo: 100.00, porcentaje_corte: 100.00 }]);
+                                                                                        setSearchReproceso('');
+                                                                                        setShowDropdownReprocesos(false);
+                                                                                    }}
+                                                                                    className="px-3.5 py-2.5 hover:bg-indigo-50 hover:text-indigo-950 text-[9px] font-black text-slate-655 cursor-pointer flex justify-between items-center transition-colors uppercase border-b border-gray-50 last:border-b-0"
+                                                                                >
+                                                                                    <span>{prodLabel}</span>
+                                                                                    <span className="text-[8px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full font-extrabold uppercase">Seleccionar</span>
+                                                                                </div>
+                                                                            );
+                                                                        })
+                                                                    ) : (
+                                                                        <div className="px-3.5 py-2.5 text-[9px] font-bold text-slate-450 italic text-center">Sin sugerencias coincidentes o vacías</div>
+                                                                    )}
+                                                                </div>
                                                             )}
                                                         </div>
-                                                    )}
-                                                </div>
 
-                                                {/* Lista de Seleccionados */}
-                                                <div className="space-y-1">
-                                                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider ml-1">Subproductos Mapeados ({reprocesosSeleccionados.length})</span>
-                                                    {reprocesosSeleccionados.length > 0 ? (
-                                                        <div className="space-y-1.5 bg-white p-2.5 rounded-xl border border-gray-100 shadow-inner">
-                                                            <div className="space-y-1.5 overflow-y-auto custom-scrollbar pr-1">
-                                                                {reprocesosSeleccionados.map(rep => {
-                                                                    const id = rep.id_producto_destino;
-                                                                    const prod = productosCortes.find(p => p.id === id);
-                                                                    if (!prod) return null;
-                                                                    const prodLabel = [prod.rubro?.nombre, prod.marca?.nombre, prod.variedad].filter(Boolean).join(' · ');
-                                                                    return (
-                                                                        <div key={id} className="flex items-center justify-between p-2 rounded-lg bg-indigo-50/30 border border-indigo-100/20 text-[9px] font-extrabold text-slate-700 uppercase animate-in slide-in-from-top-1 duration-200 gap-2">
-                                                                            <span className="truncate flex-1">{prodLabel}</span>
-                                                                            <button
-                                                                                type="button"
-                                                                                onClick={() => {
-                                                                                    const isUtil = rep.porcentaje_costo > 0;
-                                                                                    const newCosto = isUtil ? 0.00 : 100.00;
-                                                                                    const newCorte = isUtil ? 0.00 : 100.00;
-                                                                                    setReprocesosSeleccionados(prev => prev.map(x => x.id_producto_destino === id ? { ...x, porcentaje_costo: newCosto, porcentaje_corte: newCorte } : x));
-                                                                                }}
-                                                                                className={`px-3 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all duration-300 border shrink-0 active:scale-95 ${
-                                                                                    rep.porcentaje_costo > 0
-                                                                                    ? 'bg-emerald-50 border-emerald-200 text-emerald-700 shadow-sm shadow-emerald-900/10 hover:bg-emerald-100/50'
-                                                                                    : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100/50'
-                                                                                }`}
-                                                                            >
-                                                                                {rep.porcentaje_costo > 0 ? 'Corte Útil' : 'Desperdicio (Costo $0.00)'}
-                                                                            </button>
-                                                                            <button
-                                                                                type="button"
-                                                                                onClick={() => setReprocesosSeleccionados(prev => prev.filter(x => x.id_producto_destino !== id))}
-                                                                                className="p-1 text-red-400 hover:text-red-650 hover:bg-red-50 rounded-lg active:scale-90 transition-all shrink-0"
-                                                                            >
-                                                                                <Trash2 size={12} />
-                                                                            </button>
-                                                                        </div>
-                                                                    );
-                                                                })}
-                                                            </div>
+                                                        {/* Lista de Seleccionados */}
+                                                        <div className="space-y-1">
+                                                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider ml-1">Subproductos Mapeados ({reprocesosSeleccionados.length})</span>
+                                                            {reprocesosSeleccionados.length > 0 ? (
+                                                                <div className="space-y-1.5 bg-white p-2.5 rounded-xl border border-gray-100 shadow-inner">
+                                                                    <div className="space-y-1.5 overflow-y-auto custom-scrollbar pr-1">
+                                                                        {reprocesosSeleccionados.map(rep => {
+                                                                            const id = rep.id_producto_destino;
+                                                                            const prod = productosCortes.find(p => p.id === id);
+                                                                            if (!prod) return null;
+                                                                            const prodLabel = [prod.rubro?.nombre, prod.marca?.nombre, prod.variedad].filter(Boolean).join(' · ');
+                                                                            return (
+                                                                                <div key={id} className="flex items-center justify-between p-2 rounded-lg bg-indigo-50/30 border border-indigo-100/20 text-[9px] font-extrabold text-slate-700 uppercase animate-in slide-in-from-top-1 duration-200 gap-2">
+                                                                                    <span className="truncate flex-1">{prodLabel}</span>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => {
+                                                                                            const isUtil = rep.porcentaje_costo > 0;
+                                                                                            const newCosto = isUtil ? 0.00 : 100.00;
+                                                                                            const newCorte = isUtil ? 0.00 : 100.00;
+                                                                                            setReprocesosSeleccionados(prev => prev.map(x => x.id_producto_destino === id ? { ...x, porcentaje_costo: newCosto, porcentaje_corte: newCorte } : x));
+                                                                                        }}
+                                                                                        className={`px-3 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all duration-300 border shrink-0 active:scale-95 ${
+                                                                                            rep.porcentaje_costo > 0
+                                                                                            ? 'bg-emerald-50 border-emerald-200 text-emerald-700 shadow-sm shadow-emerald-900/10 hover:bg-emerald-100/50'
+                                                                                            : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100/50'
+                                                                                        }`}
+                                                                                    >
+                                                                                        {rep.porcentaje_costo > 0 ? 'Corte Útil' : 'Desperdicio (Costo $0.00)'}
+                                                                                    </button>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => setReprocesosSeleccionados(prev => prev.filter(x => x.id_producto_destino !== id))}
+                                                                                        className="p-1 text-red-400 hover:text-red-650 hover:bg-red-50 rounded-lg active:scale-90 transition-all shrink-0"
+                                                                                    >
+                                                                                        <Trash2 size={12} />
+                                                                                    </button>
+                                                                                </div>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="text-[8px] font-bold text-slate-450 italic bg-white p-3.5 rounded-xl border border-gray-150 text-center">
+                                                                    No se han asociado subproductos. Utilice el buscador para agregar.
+                                                                </div>
+                                                            )}
                                                         </div>
-                                                    ) : (
-                                                        <div className="text-[8px] font-bold text-slate-450 italic bg-white p-3.5 rounded-xl border border-gray-150 text-center">
-                                                            No se han asociado subproductos. Utilice el buscador para agregar.
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
+                                                    </div>
+                                                )}
+                                            </>
                                         )}
 
                                         <label className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50/50 border border-slate-100 cursor-pointer hover:bg-slate-100/50 transition-all group/status">
